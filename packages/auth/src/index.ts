@@ -43,3 +43,28 @@ export {
   refreshGoogleToken,
   type GoogleUser,
 } from './oauth/google';
+
+// ============ OTP Authentication ============
+export {
+  // Types
+  type OTPChannel,
+  type OTPPurpose,
+  type OTPRequest,
+  type OTPVerification,
+  type OTPResult,
+  type OTPConfig,
+  DEFAULT_OTP_CONFIG,
+  // Store
+  generateOTP,
+  storeOTP,
+  verifyOTP,
+  isOnCooldown,
+  getCooldownRemaining,
+  blockDestination,
+  isBlocked,
+  clearOTP,
+} from './otp';
+
+export { getWhatsAppProvider } from './otp/whatsapp';
+export { getSMSProvider } from './otp/sms';
+export { sendEmailOTP } from './otp/email-otp';

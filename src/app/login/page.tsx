@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Mail, Lock, Eye, EyeOff, Sparkles, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Sparkles, ArrowRight, AlertCircle, Loader2, Smartphone } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
 import { createUserProfile, loadData } from '@/lib/firestore';
@@ -19,8 +19,12 @@ import { usePageTitle } from '@/hooks/use-page-title';
 import { checkEmailAccess } from '@/lib/access-control';
 import { useSearchParams } from 'next/navigation';
 import { ForgotPasswordDialog } from '@/components/forgot-password-dialog';
+import { OTPLogin } from '@/components/otp-login';
+
+type LoginMethod = 'password' | 'otp';
 
 export default function LoginPage() {
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -211,11 +215,42 @@ export default function LoginPage() {
               <div className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-card text-muted-foreground">or continue with email</span>
+              <span className="px-3 bg-card text-muted-foreground">or continue with</span>
             </div>
           </div>
 
-          {/* Form */}
+          {/* Login Method Tabs */}
+          <div className="flex rounded-lg border border-border/80 bg-muted/30 p-1 gap-1">
+            <button
+              type="button"
+              onClick={() => setLoginMethod('password')}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200",
+                loginMethod === 'password'
+                  ? "bg-background shadow-sm text-foreground border border-border/50"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Mail className="h-3.5 w-3.5" />
+              Email
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoginMethod('otp')}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200",
+                loginMethod === 'otp'
+                  ? "bg-background shadow-sm text-foreground border border-border/50"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              OTP
+            </button>
+          </div>
+
+          {/* Password Login Form */}
+          {loginMethod === 'password' && (
           <form onSubmit={handleLogin} className="space-y-4">
             {/* Email */}
             <div className="space-y-1.5">
@@ -333,6 +368,17 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+          )}
+
+          {/* OTP Login */}
+          {loginMethod === 'otp' && (
+            <OTPLogin
+              onSuccess={() => {
+                toast.success('Welcome!');
+                router.replace(getReturnUrl());
+              }}
+            />
+          )}
 
           {/* Sign up link */}
           <p className="text-center text-sm text-muted-foreground">
