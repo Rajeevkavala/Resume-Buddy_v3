@@ -53,14 +53,11 @@ export function middleware(request: NextRequest) {
   
   response.headers.set('Content-Security-Policy', csp);
 
-  // Check for authentication cookie (fast-auth-uid cookie set by auth-context)
-  const authCookie = request.cookies.get('fast-auth-uid');
-  const isAuthenticated = !!authCookie?.value;
-  
-  // REMOVED: Whitelist-based access control
-  // All authenticated users now have access (tier-based limits handled by subscription system)
-  // const accessDeniedCookie = request.cookies.get('access-denied');
-  // const isAccessDenied = accessDeniedCookie?.value === 'true';
+  // Check for authentication cookie
+  // New auth system uses rb_session, legacy system used fast-auth-uid
+  const newAuthCookie = request.cookies.get('rb_session');
+  const legacyAuthCookie = request.cookies.get('fast-auth-uid');
+  const isAuthenticated = !!(newAuthCookie?.value || legacyAuthCookie?.value);
 
   // Allow public routes
   const isPublicRoute = PUBLIC_ROUTES.some(route => 
@@ -124,6 +121,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Match all routes except API, static files, and public assets
     '/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|icons|public).*)',
   ],
 };

@@ -1,5 +1,5 @@
-// ============ Auth Package - Public API ============
-// Re-export all auth utilities
+// Re-export from packages/auth for use in the Next.js app via @/lib/auth
+// This bridges the monorepo package to the app's import system
 
 export {
   generateAccessToken,
@@ -12,9 +12,6 @@ export {
   type TokenPayload,
   type TokenPair,
   type TokenUser,
-} from './jwt';
-
-export {
   createSession,
   getSession,
   updateSessionActivity,
@@ -25,9 +22,6 @@ export {
   getRedis,
   type SessionData,
   type SessionInfo,
-} from './session';
-
-export {
   hashPassword,
   verifyPassword,
   validatePassword,
@@ -35,11 +29,8 @@ export {
   passwordSchema,
   type PasswordValidationResult,
   type PasswordStrength,
-} from './password';
-
-export {
   getGoogleAuthUrl,
   getGoogleUser,
   refreshGoogleToken,
   type GoogleUser,
-} from './oauth/google';
+} from '../../packages/auth/src';
