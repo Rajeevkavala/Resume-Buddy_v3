@@ -1,53 +1,20 @@
 /**
- * User-Level Cache System
+ * User-Level Cache System — Redis-backed (Phase 2)
  * Caches AI results per user to avoid re-analyzing the same content
+ * Falls back to in-memory Map if Redis is unavailable
  */
-import { LRUCache } from 'lru-cache';
+import { getRedisClient, isRedisAvailable } from './redis';
 import crypto from 'crypto';
 
-// User cache data structure
-interface UserCacheData {
-  resumeAnalysis?: {
-    result: unknown;
-    resumeHash: string;
-    jobDescHash: string;
-    analyzedAt: Date;
-  };
-  interviewQuestions?: {
-    questions: unknown;
-    resumeHash: string;
-    jobDescHash: string;
-    generatedAt: Date;
-  };
-  improvements?: {
-    suggestions: unknown;
-    resumeHash: string;
-    jobDescHash: string;
-    generatedAt: Date;
-  };
-  parsedResume?: {
-    data: unknown;
-    resumeHash: string;
-    parsedAt: Date;
-  };
-  qaQuestions?: {
-    questions: unknown;
-    resumeHash: string;
-    jobDescHash: string;
-    generatedAt: Date;
-  };
-}
+const USER_CACHE_PREFIX = 'user_cache:';
+const USER_CACHE_TTL = 43200; // 12 hours in seconds
 
-// User cache with 24-hour TTL - Optimized for 250+ concurrent users
-const userCache = new LRUCache<string, UserCacheData>({
-  max: 500, // Optimized for memory efficiency with 250+ users
-  ttl: 1000 * 60 * 60 * 12, // 12 hour TTL (reduced for memory optimization)
-  maxSize: 50 * 1024 * 1024, // 50MB max cache size
-  sizeCalculation: (value) => JSON.stringify(value).length,
-  allowStale: true, // Allow stale entries while revalidating
-  updateAgeOnGet: true, // Reset TTL on cache hit
-  updateAgeOnHas: true,
-});
+// Types for cache data
+type CacheType = 'resumeAnalysis' | 'interviewQuestions' | 'improvements' | 'parsedResume' | 'qaQuestions';
+
+// In-memory fallback
+const memoryCache = new Map<string, string>();
+const MAX_MEMORY_SIZE = 100;
 
 /**
  * Generate a hash for content comparison
@@ -57,42 +24,79 @@ function hashContent(content: string): string {
 }
 
 /**
- * Get user's cached data
- * @param userId - User identifier
+ * Build a Redis key for user cache
  */
-export function getUserCache(userId: string): UserCacheData {
-  return userCache.get(userId) || {};
+function buildKey(userId: string, type: CacheType): string {
+  return `${USER_CACHE_PREFIX}${userId}:${type}`;
 }
 
 /**
- * Update user's cached data
- * @param userId - User identifier
- * @param data - Partial cache data to merge
+ * Get cached data from Redis
  */
-export function setUserCache(userId: string, data: Partial<UserCacheData>): void {
-  const existing = getUserCache(userId);
-  userCache.set(userId, { ...existing, ...data });
+async function getCacheEntry(userId: string, type: CacheType): Promise<unknown | null> {
+  try {
+    const redisAvailable = await isRedisAvailable();
+    const key = buildKey(userId, type);
+
+    if (redisAvailable) {
+      const redis = getRedisClient();
+      const data = await redis.get(key);
+      return data ? JSON.parse(data) : null;
+    } else {
+      const data = memoryCache.get(key);
+      return data ? JSON.parse(data) : null;
+    }
+  } catch (error) {
+    console.error(`Cache read error for ${type}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Set cached data in Redis
+ */
+async function setCacheEntry(userId: string, type: CacheType, data: unknown): Promise<void> {
+  try {
+    const redisAvailable = await isRedisAvailable();
+    const key = buildKey(userId, type);
+    const serialized = JSON.stringify(data);
+
+    if (redisAvailable) {
+      const redis = getRedisClient();
+      await redis.setex(key, USER_CACHE_TTL, serialized);
+    } else {
+      if (memoryCache.size >= MAX_MEMORY_SIZE) {
+        const firstKey = memoryCache.keys().next().value;
+        if (firstKey) memoryCache.delete(firstKey);
+      }
+      memoryCache.set(key, serialized);
+    }
+  } catch (error) {
+    console.error(`Cache write error for ${type}:`, error);
+  }
 }
 
 /**
  * Check if resume analysis is cached and valid
  */
-export function getCachedResumeAnalysis(
+export async function getCachedResumeAnalysis(
   userId: string,
   resumeText: string,
   jobDescription: string
-): unknown | null {
-  const cache = getUserCache(userId);
-  const resumeHash = hashContent(resumeText);
-  const jobDescHash = hashContent(jobDescription);
+): Promise<unknown | null> {
+  const cached = await getCacheEntry(userId, 'resumeAnalysis') as {
+    result: unknown;
+    resumeHash: string;
+    jobDescHash: string;
+  } | null;
 
   if (
-    cache.resumeAnalysis &&
-    cache.resumeAnalysis.resumeHash === resumeHash &&
-    cache.resumeAnalysis.jobDescHash === jobDescHash
+    cached &&
+    cached.resumeHash === hashContent(resumeText) &&
+    cached.jobDescHash === hashContent(jobDescription)
   ) {
     console.log(`👤 User cache hit: resume analysis`);
-    return cache.resumeAnalysis.result;
+    return cached.result;
   }
 
   return null;
@@ -101,19 +105,17 @@ export function getCachedResumeAnalysis(
 /**
  * Cache resume analysis result
  */
-export function cacheResumeAnalysis(
+export async function cacheResumeAnalysis(
   userId: string,
   resumeText: string,
   jobDescription: string,
   result: unknown
-): void {
-  setUserCache(userId, {
-    resumeAnalysis: {
-      result,
-      resumeHash: hashContent(resumeText),
-      jobDescHash: hashContent(jobDescription),
-      analyzedAt: new Date(),
-    },
+): Promise<void> {
+  await setCacheEntry(userId, 'resumeAnalysis', {
+    result,
+    resumeHash: hashContent(resumeText),
+    jobDescHash: hashContent(jobDescription),
+    analyzedAt: new Date().toISOString(),
   });
   console.log(`👤 User cache set: resume analysis`);
 }
@@ -121,22 +123,24 @@ export function cacheResumeAnalysis(
 /**
  * Check if interview questions are cached and valid
  */
-export function getCachedInterviewQuestions(
+export async function getCachedInterviewQuestions(
   userId: string,
   resumeText: string,
   jobDescription: string
-): unknown | null {
-  const cache = getUserCache(userId);
-  const resumeHash = hashContent(resumeText);
-  const jobDescHash = hashContent(jobDescription);
+): Promise<unknown | null> {
+  const cached = await getCacheEntry(userId, 'interviewQuestions') as {
+    questions: unknown;
+    resumeHash: string;
+    jobDescHash: string;
+  } | null;
 
   if (
-    cache.interviewQuestions &&
-    cache.interviewQuestions.resumeHash === resumeHash &&
-    cache.interviewQuestions.jobDescHash === jobDescHash
+    cached &&
+    cached.resumeHash === hashContent(resumeText) &&
+    cached.jobDescHash === hashContent(jobDescription)
   ) {
     console.log(`👤 User cache hit: interview questions`);
-    return cache.interviewQuestions.questions;
+    return cached.questions;
   }
 
   return null;
@@ -145,19 +149,17 @@ export function getCachedInterviewQuestions(
 /**
  * Cache interview questions
  */
-export function cacheInterviewQuestions(
+export async function cacheInterviewQuestions(
   userId: string,
   resumeText: string,
   jobDescription: string,
   questions: unknown
-): void {
-  setUserCache(userId, {
-    interviewQuestions: {
-      questions,
-      resumeHash: hashContent(resumeText),
-      jobDescHash: hashContent(jobDescription),
-      generatedAt: new Date(),
-    },
+): Promise<void> {
+  await setCacheEntry(userId, 'interviewQuestions', {
+    questions,
+    resumeHash: hashContent(resumeText),
+    jobDescHash: hashContent(jobDescription),
+    generatedAt: new Date().toISOString(),
   });
   console.log(`👤 User cache set: interview questions`);
 }
@@ -165,22 +167,24 @@ export function cacheInterviewQuestions(
 /**
  * Check if improvements are cached and valid
  */
-export function getCachedImprovements(
+export async function getCachedImprovements(
   userId: string,
   resumeText: string,
   jobDescription: string
-): unknown | null {
-  const cache = getUserCache(userId);
-  const resumeHash = hashContent(resumeText);
-  const jobDescHash = hashContent(jobDescription);
+): Promise<unknown | null> {
+  const cached = await getCacheEntry(userId, 'improvements') as {
+    suggestions: unknown;
+    resumeHash: string;
+    jobDescHash: string;
+  } | null;
 
   if (
-    cache.improvements &&
-    cache.improvements.resumeHash === resumeHash &&
-    cache.improvements.jobDescHash === jobDescHash
+    cached &&
+    cached.resumeHash === hashContent(resumeText) &&
+    cached.jobDescHash === hashContent(jobDescription)
   ) {
     console.log(`👤 User cache hit: improvements`);
-    return cache.improvements.suggestions;
+    return cached.suggestions;
   }
 
   return null;
@@ -189,19 +193,17 @@ export function getCachedImprovements(
 /**
  * Cache improvement suggestions
  */
-export function cacheImprovements(
+export async function cacheImprovements(
   userId: string,
   resumeText: string,
   jobDescription: string,
   suggestions: unknown
-): void {
-  setUserCache(userId, {
-    improvements: {
-      suggestions,
-      resumeHash: hashContent(resumeText),
-      jobDescHash: hashContent(jobDescription),
-      generatedAt: new Date(),
-    },
+): Promise<void> {
+  await setCacheEntry(userId, 'improvements', {
+    suggestions,
+    resumeHash: hashContent(resumeText),
+    jobDescHash: hashContent(jobDescription),
+    generatedAt: new Date().toISOString(),
   });
   console.log(`👤 User cache set: improvements`);
 }
@@ -209,19 +211,21 @@ export function cacheImprovements(
 /**
  * Check if parsed resume is cached and valid
  */
-export function getCachedParsedResume(
+export async function getCachedParsedResume(
   userId: string,
   resumeText: string
-): unknown | null {
-  const cache = getUserCache(userId);
-  const resumeHash = hashContent(resumeText);
+): Promise<unknown | null> {
+  const cached = await getCacheEntry(userId, 'parsedResume') as {
+    data: unknown;
+    resumeHash: string;
+  } | null;
 
   if (
-    cache.parsedResume &&
-    cache.parsedResume.resumeHash === resumeHash
+    cached &&
+    cached.resumeHash === hashContent(resumeText)
   ) {
     console.log(`👤 User cache hit: parsed resume`);
-    return cache.parsedResume.data;
+    return cached.data;
   }
 
   return null;
@@ -230,17 +234,15 @@ export function getCachedParsedResume(
 /**
  * Cache parsed resume
  */
-export function cacheParsedResume(
+export async function cacheParsedResume(
   userId: string,
   resumeText: string,
   data: unknown
-): void {
-  setUserCache(userId, {
-    parsedResume: {
-      data,
-      resumeHash: hashContent(resumeText),
-      parsedAt: new Date(),
-    },
+): Promise<void> {
+  await setCacheEntry(userId, 'parsedResume', {
+    data,
+    resumeHash: hashContent(resumeText),
+    parsedAt: new Date().toISOString(),
   });
   console.log(`👤 User cache set: parsed resume`);
 }
@@ -248,20 +250,53 @@ export function cacheParsedResume(
 /**
  * Clear all cache for a user
  */
-export function clearUserCache(userId: string): void {
-  userCache.delete(userId);
-  console.log(`🗑️ User cache cleared for: ${userId}`);
+export async function clearUserCache(userId: string): Promise<void> {
+  try {
+    const redisAvailable = await isRedisAvailable();
+    if (redisAvailable) {
+      const redis = getRedisClient();
+      const keys = await redis.keys(`${USER_CACHE_PREFIX}${userId}:*`);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    }
+    // Also clear memory fallback
+    for (const key of memoryCache.keys()) {
+      if (key.startsWith(`${USER_CACHE_PREFIX}${userId}:`)) {
+        memoryCache.delete(key);
+      }
+    }
+    console.log(`🗑️ User cache cleared for: ${userId}`);
+  } catch (error) {
+    console.error('Error clearing user cache:', error);
+  }
 }
 
 /**
  * Get cache statistics
  */
-export function getUserCacheStats(): {
+export async function getUserCacheStats(): Promise<{
   totalUsers: number;
   maxUsers: number;
-} {
+}> {
+  try {
+    const redisAvailable = await isRedisAvailable();
+    if (redisAvailable) {
+      const redis = getRedisClient();
+      const keys = await redis.keys(`${USER_CACHE_PREFIX}*`);
+      // Count unique user IDs
+      const userIds = new Set(keys.map(k => k.split(':')[1]));
+      return {
+        totalUsers: userIds.size,
+        maxUsers: -1,
+      };
+    }
+  } catch (error) {
+    // ignore
+  }
+
   return {
-    totalUsers: userCache.size,
-    maxUsers: 1000,
+    totalUsers: memoryCache.size,
+    maxUsers: MAX_MEMORY_SIZE,
   };
 }

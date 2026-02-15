@@ -1,5 +1,5 @@
-// Prisma schema stub for Phase 1
-// Full schema will be implemented in Phase 2
+// ResumeBuddy Phase 2 — Complete Database Schema
+// PostgreSQL + Prisma ORM — All models, enums, indexes
 
 generator client {
   provider = "prisma-client-js"
@@ -8,76 +8,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-// ============ User & Auth Models (Phase 1.2) ============
-
-model User {
-  id              String    @id @default(uuid()) @db.Uuid
-  email           String    @unique @db.VarChar(255)
-  name            String?   @db.VarChar(255)
-  passwordHash    String?   @db.VarChar(255) @map("password_hash")
-  avatar          String?   @db.VarChar(500)
-  role            UserRole  @default(USER)
-  status          UserStatus @default(ACTIVE)
-  emailVerified   Boolean   @default(false) @map("email_verified")
-  lastLoginAt     DateTime? @map("last_login_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  accounts        Account[]
-  refreshTokens   RefreshToken[]
-  subscription    Subscription?
-
-  @@map("users")
-}
-
-model Account {
-  id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @db.Uuid @map("user_id")
-  provider          String   @db.VarChar(50)   // 'credentials' | 'google' | 'github'
-  providerAccountId String   @db.VarChar(255)  @map("provider_account_id")
-  accessToken       String?  @db.Text @map("access_token")
-  refreshToken      String?  @db.Text @map("refresh_token")
-  expiresAt         DateTime? @map("expires_at")
-  createdAt         DateTime @default(now()) @map("created_at")
-
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@map("accounts")
-}
-
-model RefreshToken {
-  id          String   @id @default(uuid()) @db.Uuid
-  token       String   @unique @db.VarChar(500)
-  userId      String   @db.Uuid @map("user_id")
-  expiresAt   DateTime @map("expires_at")
-  revoked     Boolean  @default(false)
-  revokedAt   DateTime? @map("revoked_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([token])
-  @@map("refresh_tokens")
-}
-
-model Subscription {
-  id                String           @id @default(uuid()) @db.Uuid
-  userId            String           @unique @db.Uuid @map("user_id")
-  tier              SubscriptionTier @default(FREE)
-  currentPeriodEnd  DateTime?        @map("current_period_end")
-  razorpayOrderId   String?          @db.VarChar(255) @map("razorpay_order_id")
-  razorpayPaymentId String?          @db.VarChar(255) @map("razorpay_payment_id")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("subscriptions")
 }
 
 // ============ Enums ============
@@ -96,4 +26,319 @@ enum UserStatus {
 enum SubscriptionTier {
   FREE
   PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PAST_DUE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum InterviewType {
+  TECHNICAL
+  BEHAVIORAL
+  SYSTEM_DESIGN
+  HR
+  MIXED
+  DSA
+}
+
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum InterviewStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ResumeFormat {
+  LATEX
+  PDF
+  DOCX
+}
+
+enum ResumeStatus {
+  DRAFT
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+enum VerificationType {
+  EMAIL
+  PHONE
+  PASSWORD_RESET
+}
+
+// ============ User & Auth Models ============
+
+model User {
+  id              String    @id @default(cuid()) @db.VarChar(128)  // Firebase UID or custom ID
+  email           String    @unique @db.VarChar(255)
+  name            String?   @db.VarChar(255)
+  passwordHash    String?   @db.VarChar(255) @map("password_hash")
+  phone           String?   @unique @db.VarChar(20)
+  phoneVerified   Boolean   @default(false) @map("phone_verified")
+  avatar          String?   @db.VarChar(500)
+  role            UserRole  @default(USER)
+  status          UserStatus @default(ACTIVE)
+  emailVerified   Boolean   @default(false) @map("email_verified")
+  lastLoginAt     DateTime? @map("last_login_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  accounts         Account[]
+  sessions         Session[]
+  refreshTokens    RefreshToken[]
+  subscription     Subscription?
+  payments         Payment[]
+  usageRecords     UsageRecord[]
+  resumes          ResumeData[]
+  interviews       Interview[]
+  storedFiles      StoredFile[]
+  generatedResumes GeneratedResume[]
+
+  @@index([email])
+  @@index([phone])
+  @@map("users")
+}
+
+model Account {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.VarChar(128)
+  provider          String   @db.VarChar(50)   // 'credentials' | 'google' | 'github'
+  providerAccountId String   @db.VarChar(255)  @map("provider_account_id")
+  accessToken       String?  @db.Text @map("access_token")
+  refreshToken      String?  @db.Text @map("refresh_token")
+  expiresAt         DateTime? @map("expires_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id              String   @id @default(uuid()) @db.Uuid
+  sessionId       String   @unique @db.VarChar(100) @map("session_id")
+  userId          String   @map("user_id") @db.VarChar(128)
+  userAgent       String?  @db.Text @map("user_agent")
+  ipAddress       String?  @db.VarChar(45) @map("ip_address")
+  expiresAt       DateTime @map("expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  lastActivityAt  DateTime @default(now()) @map("last_activity_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id              String   @id @default(uuid()) @db.Uuid
+  token           String   @unique @db.VarChar(500)
+  userId          String   @map("user_id") @db.VarChar(128)
+  expiresAt       DateTime @map("expires_at")
+  revoked         Boolean  @default(false)
+  revokedAt       DateTime? @map("revoked_at")
+  replacedByToken String?  @db.VarChar(500) @map("replaced_by_token")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model VerificationToken {
+  identifier String   @db.VarChar(255)
+  token      String   @db.VarChar(255)
+  type       VerificationType @default(EMAIL)
+  expires    DateTime
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============ Subscription & Payment Models ============
+
+model Subscription {
+  id                      String             @id @default(uuid()) @db.Uuid
+  userId                  String             @unique @map("user_id") @db.VarChar(128)
+  tier                    SubscriptionTier   @default(FREE)
+  status                  SubscriptionStatus @default(ACTIVE)
+  razorpaySubscriptionId  String?            @db.VarChar(255) @map("razorpay_subscription_id")
+  razorpayCustomerId      String?            @db.VarChar(255) @map("razorpay_customer_id")
+  razorpayOrderId         String?            @db.VarChar(255) @map("razorpay_order_id")
+  razorpayPaymentId       String?            @db.VarChar(255) @map("razorpay_payment_id")
+  currentPeriodStart      DateTime?          @map("current_period_start")
+  currentPeriodEnd        DateTime?          @map("current_period_end")
+  cancelledAt             DateTime?          @map("cancelled_at")
+  cancelAtPeriodEnd       Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @map("user_id") @db.VarChar(128)
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("INR") @db.VarChar(10)
+  status            PaymentStatus @default(PENDING)
+  razorpayPaymentId String?       @unique @db.VarChar(255) @map("razorpay_payment_id")
+  razorpayOrderId   String?       @db.VarChar(255) @map("razorpay_order_id")
+  razorpaySignature String?       @db.VarChar(500) @map("razorpay_signature")
+  planType          String?       @db.VarChar(50) @map("plan_type")
+  description       String?       @db.Text
+  metadata          Json?
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([razorpayPaymentId])
+  @@map("payments")
+}
+
+// ============ Usage Tracking ============
+
+model UsageRecord {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.VarChar(128)
+  feature   String   @db.VarChar(50)
+  count     Int      @default(1)
+  date      DateTime @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, feature, date])
+  @@index([userId, date])
+  @@index([userId, feature])
+  @@map("usage_records")
+}
+
+// ============ Resume & Analysis Models ============
+
+model ResumeData {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.VarChar(128)
+  title           String?   @db.VarChar(255)
+  resumeText      String?   @db.Text @map("resume_text")
+  jobDescription  String?   @db.Text @map("job_description")
+  jobRole         String?   @db.VarChar(100) @map("job_role")
+  jobUrl          String?   @db.VarChar(500) @map("job_url")
+  parsedData      Json?     @map("parsed_data")
+  analysis        Json?
+  improvements    Json?
+  qaHistory       Json?     @map("qa_history")
+  coverLetter     String?   @db.Text @map("cover_letter")
+  isActive        Boolean   @default(true) @map("is_active")
+  lastAnalyzedAt  DateTime? @map("last_analyzed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interviews      Interview[]
+  generatedResumes GeneratedResume[]
+
+  @@index([userId, isActive])
+  @@index([userId, createdAt])
+  @@map("resume_data")
+}
+
+// ============ Interview Models ============
+
+model Interview {
+  id            String          @id @default(uuid()) @db.Uuid
+  userId        String          @map("user_id") @db.VarChar(128)
+  resumeDataId  String?         @db.Uuid @map("resume_data_id")
+  type          InterviewType
+  difficulty    DifficultyLevel
+  role          String?         @db.VarChar(100)
+  company       String?         @db.VarChar(100)
+  questions     Json
+  answers       Json?
+  feedback      Json?
+  score         Int?
+  status        InterviewStatus @default(NOT_STARTED)
+  startedAt     DateTime?       @map("started_at")
+  completedAt   DateTime?       @map("completed_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeData    ResumeData?     @relation(fields: [resumeDataId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@map("interviews")
+}
+
+// ============ File Storage Models ============
+
+model StoredFile {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.VarChar(128)
+  filename    String    @db.VarChar(255)
+  originalName String   @db.VarChar(255) @map("original_name")
+  mimeType    String    @db.VarChar(100) @map("mime_type")
+  size        Int
+  bucket      String    @default("resumebuddy") @db.VarChar(100)
+  objectKey   String    @db.VarChar(500) @map("object_key")
+  publicUrl   String?   @db.VarChar(500) @map("public_url")
+  isPublic    Boolean   @default(false) @map("is_public")
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generatedResumes GeneratedResume[]
+
+  @@index([userId, createdAt])
+  @@map("stored_files")
+}
+
+// ============ Generated Resume Models ============
+
+model GeneratedResume {
+  id            String       @id @default(uuid()) @db.Uuid
+  userId        String       @map("user_id") @db.VarChar(128)
+  resumeDataId  String       @db.Uuid @map("resume_data_id")
+  templateId    String       @db.VarChar(50) @map("template_id")
+  format        ResumeFormat
+  latexSource   String?      @db.Text @map("latex_source")
+  fileId        String?      @db.Uuid @map("file_id")
+  status        ResumeStatus @default(DRAFT)
+  error         String?      @db.Text
+  generatedAt   DateTime?    @map("generated_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeData    ResumeData   @relation(fields: [resumeDataId], references: [id], onDelete: Cascade)
+  file          StoredFile?  @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@map("generated_resumes")
 }

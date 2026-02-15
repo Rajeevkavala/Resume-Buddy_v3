@@ -24,10 +24,10 @@ import type {EvaluateCodeInput} from '@/ai/flows/evaluate-code-solution';
 import {Packer, Document, Paragraph, TextRun, HeadingLevel} from 'docx';
 import mammoth from 'mammoth';
 import pdf from 'pdf-parse-fork';
-import { saveData as saveToDb, clearData as clearFromDb, updateUserProfileInDb } from '@/lib/firestore';
+import { saveData as saveToDb, clearData as clearFromDb, updateUserProfileInDb } from '@/lib/data-persistence';
 import type { AnalysisResult, JobRole } from '@/lib/types';
 import type { AnalyzeResumeContentOutput } from '@/ai/flows/analyze-resume-content';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// Firebase Storage import removed — profile photos use Supabase (client-side)
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { getJobDescriptionForRole, shouldUsePreset } from '@/lib/job-description-presets';

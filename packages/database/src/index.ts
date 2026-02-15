@@ -1,19 +1,18 @@
-import { PrismaClient } from '@prisma/client';
+// Re-export Prisma client singleton
+export { prisma, default as prismaClient } from './client';
 
-// Prevent multiple Prisma Client instances in development (hot reload)
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  });
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
-
+// Re-export Prisma types
 export { PrismaClient } from '@prisma/client';
 export * from '@prisma/client';
+
+// Re-export subscription helpers
+export {
+  getUserTier,
+  checkFeatureAccess,
+  assertFeatureAllowed,
+  getRemainingCredits,
+  incrementUsage,
+  getDailyExportUsage,
+  incrementExportUsage,
+  TIER_LIMITS,
+} from './subscription';

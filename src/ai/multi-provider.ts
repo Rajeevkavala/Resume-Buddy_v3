@@ -146,7 +146,7 @@ export async function generateWithFallback(
 
   // Check cache first
   if (useCache) {
-    const cached = getCachedResponse(compressedPrompt, compressedSystemPrompt);
+    const cached = await getCachedResponse(compressedPrompt, compressedSystemPrompt);
     if (cached) {
       // Track cached request
       trackUsage({
@@ -199,7 +199,7 @@ export async function generateWithFallback(
 
         // Cache the successful response
         if (useCache) {
-          setCachedResponse(compressedPrompt, content, provider.name, compressedSystemPrompt);
+          await setCachedResponse(compressedPrompt, content, provider.name, compressedSystemPrompt);
         }
 
         // Track successful request in analytics

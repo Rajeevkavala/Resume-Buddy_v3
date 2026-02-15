@@ -1,4 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
+import { nanoid } from 'nanoid';
 
 // ============ Types ============
 
@@ -63,6 +64,7 @@ export async function generateAccessToken(user: TokenUser): Promise<string> {
   return new SignJWT(payload as JWTPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
+    .setJti(nanoid())
     .setIssuer(ISSUER)
     .setAudience(AUDIENCE)
     .setIssuedAt()
@@ -84,6 +86,7 @@ export async function generateRefreshToken(user: TokenUser): Promise<string> {
   return new SignJWT(payload as JWTPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(user.id)
+    .setJti(nanoid())
     .setIssuer(ISSUER)
     .setAudience(AUDIENCE)
     .setIssuedAt()

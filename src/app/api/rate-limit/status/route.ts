@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDailyUsageStatusAsync, getDailyLimitConfig, getRateLimitConfigs } from '@/lib/rate-limiter';
-import { resetDailyUsageInDb } from '@/lib/firestore';
+import { getDailyUsageStatusAsync, getDailyLimitConfig, getRateLimitConfigs, resetDailyLimit } from '@/lib/rate-limiter';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -89,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'reset') {
-      await resetDailyUsageInDb(userId);
+      await resetDailyLimit(userId);
       return NextResponse.json({
         success: true,
         message: `Daily usage reset for user ${userId}`,

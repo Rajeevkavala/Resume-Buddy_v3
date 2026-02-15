@@ -20,6 +20,7 @@ import {
   calculateProExpiry,
 } from '@/lib/payments/razorpay';
 import { updateSubscription, getSubscription } from '@/lib/subscription-service';
+import { prisma } from '@/lib/db';
 
 // Disable body parsing - we need the raw body for signature verification
 export const config = {
@@ -93,12 +94,31 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * Ensure user exists in PostgreSQL (auto-create if needed during migration)
+ */
+async function ensureUserExists(userId: string): Promise<void> {
+  const existing = await prisma.user.findUnique({ where: { id: userId } });
+  if (!existing) {
+    await prisma.user.create({
+      data: {
+        id: userId,
+        email: `${userId}@webhook.placeholder`,
+        status: 'ACTIVE',
+        role: 'USER',
+      },
+    });
+  }
+}
+
+/**
  * Handle order.paid event
  * Activates Pro for 30 days
  */
 async function handleOrderPaid(order: {
   id: string;
   status: string;
+  amount: number;
+  currency: string;
   notes: Record<string, string>;
 }) {
   const userId = order.notes?.user_id;
@@ -108,15 +128,31 @@ async function handleOrderPaid(order: {
     return;
   }
 
+  // Ensure user exists in PostgreSQL
+  await ensureUserExists(userId);
+
   // Check if already activated (client-side may have handled it)
   const existing = await getSubscription(userId);
-  if (existing?.razorpayOrderId === order.id && existing.tier === 'pro') {
+  if (existing?.razorpayOrderId === order.id && existing.tier === 'PRO') {
     console.log(`Order ${order.id} already processed for user ${userId}`);
     return;
   }
 
   const expiryDate = calculateProExpiry();
   const now = new Date();
+
+  // Create payment record
+  await prisma.payment.create({
+    data: {
+      userId,
+      amount: (order.amount || 0) / 100, // Convert from paise to rupees
+      currency: order.currency || 'INR',
+      status: 'COMPLETED',
+      razorpayOrderId: order.id,
+      planType: 'PRO',
+      description: 'Pro subscription via webhook (order.paid)',
+    },
+  });
 
   await updateSubscription(userId, {
     tier: 'pro',
@@ -140,6 +176,8 @@ async function handlePaymentCaptured(payment: {
   id: string;
   order_id: string;
   status: string;
+  amount: number;
+  currency: string;
   notes: Record<string, string>;
 }) {
   const userId = payment.notes?.user_id;
@@ -150,15 +188,32 @@ async function handlePaymentCaptured(payment: {
     return;
   }
 
+  // Ensure user exists in PostgreSQL
+  await ensureUserExists(userId);
+
   // Check if already activated
   const existing = await getSubscription(userId);
-  if (existing?.razorpayPaymentId === payment.id && existing.tier === 'pro') {
+  if (existing?.razorpayPaymentId === payment.id && existing.tier === 'PRO') {
     console.log(`Payment ${payment.id} already processed for user ${userId}`);
     return;
   }
 
   const expiryDate = calculateProExpiry();
   const now = new Date();
+
+  // Create payment record
+  await prisma.payment.create({
+    data: {
+      userId,
+      amount: (payment.amount || 0) / 100,
+      currency: payment.currency || 'INR',
+      status: 'COMPLETED',
+      razorpayPaymentId: payment.id,
+      razorpayOrderId: payment.order_id,
+      planType: 'PRO',
+      description: 'Pro subscription via webhook (payment.captured)',
+    },
+  });
 
   await updateSubscription(userId, {
     tier: 'pro',

@@ -1,17 +1,15 @@
 /**
- * Subscription Service
+ * Subscription Service — PostgreSQL-backed (Phase 2)
  * Handles subscription management, tier lookups, and feature access control
  * 
- * Firestore collections:
- * - subscriptions/{uid} - Subscription documents
- * - usage/{uid}/exports/daily - Daily export usage
+ * PostgreSQL tables:
+ * - subscriptions - Subscription records per user
+ * - usage_records - Daily usage tracking per feature
  */
 
-import { doc, getDoc, setDoc, updateDoc, runTransaction, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from './firebase';
+import { prisma } from '@/lib/db';
 import {
   type SubscriptionTier,
-  type SubscriptionDoc,
   type SubscriptionStatus,
   type AIFeature,
   type FeatureAccessResult,
@@ -25,9 +23,6 @@ import {
 
 // ============ Date Utilities ============
 
-/**
- * Get current date string in YYYY-MM-DD format
- */
 function getCurrentDateString(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -36,9 +31,12 @@ function getCurrentDateString(): string {
   return `${year}-${month}-${day}`;
 }
 
-/**
- * Get midnight of next day for reset time
- */
+function getStartOfToday(): Date {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now;
+}
+
 function getNextMidnight(): Date {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -49,20 +47,16 @@ function getNextMidnight(): Date {
 // ============ Subscription CRUD ============
 
 /**
- * Get user's subscription document from Firestore
- * Returns null if no subscription exists (treat as free tier)
+ * Get user's subscription from PostgreSQL
  */
-export async function getSubscription(userId: string): Promise<SubscriptionDoc | null> {
+export async function getSubscription(userId: string) {
   if (!userId) return null;
-  
+
   try {
-    const subRef = doc(db, 'subscriptions', userId);
-    const subSnap = await getDoc(subRef);
-    
-    if (subSnap.exists()) {
-      return subSnap.data() as SubscriptionDoc;
-    }
-    return null;
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+    return subscription;
   } catch (error) {
     console.error('Error fetching subscription:', error);
     return null;
@@ -71,85 +65,123 @@ export async function getSubscription(userId: string): Promise<SubscriptionDoc |
 
 /**
  * Get user's subscription tier
- * Returns 'free' if no subscription exists or subscription is inactive
+ * Returns 'free' if no subscription exists or is expired
  */
 export async function getUserTier(userId: string): Promise<SubscriptionTier> {
   if (!userId) return 'free';
-  
+
   try {
-    const subscription = await getSubscription(userId);
-    
-    if (!subscription) {
-      return 'free';
-    }
-    
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+
+    if (!subscription) return 'free';
+
     // Check if subscription is active
-    if (subscription.status === 'active' || subscription.status === 'trialing') {
-      // Check if still within billing period
+    if (subscription.status === 'ACTIVE') {
       if (subscription.currentPeriodEnd) {
-        const periodEnd = new Date(subscription.currentPeriodEnd);
-        if (periodEnd > new Date()) {
-          return subscription.tier;
+        if (subscription.currentPeriodEnd > new Date()) {
+          return subscription.tier === 'PRO' ? 'pro' : 'free';
         }
-      } else {
-        // No period end set, trust the status
-        return subscription.tier;
+        return 'free'; // Period expired
+      }
+      return subscription.tier === 'PRO' ? 'pro' : 'free';
+    }
+
+    // Past due: give grace period
+    if (subscription.status === 'PAST_DUE') {
+      return subscription.tier === 'PRO' ? 'pro' : 'free';
+    }
+
+    // Cancelled but still in period
+    if (subscription.status === 'CANCELLED' && subscription.currentPeriodEnd) {
+      if (subscription.currentPeriodEnd > new Date()) {
+        return subscription.tier === 'PRO' ? 'pro' : 'free';
       }
     }
-    
-    // Past due: give grace period (still return tier)
-    if (subscription.status === 'past_due') {
-      return subscription.tier;
-    }
-    
-    // Canceled but still in period
-    if (subscription.status === 'canceled' && subscription.currentPeriodEnd) {
-      const periodEnd = new Date(subscription.currentPeriodEnd);
-      if (periodEnd > new Date()) {
-        return subscription.tier;
-      }
-    }
-    
+
     return 'free';
   } catch (error) {
     console.error('Error getting user tier:', error);
-    // Fail closed - return free tier on error
     return 'free';
   }
 }
 
 /**
- * Create or update subscription document
+ * Create or update subscription
  */
 export async function updateSubscription(
   userId: string,
-  data: Partial<SubscriptionDoc>
+  data: {
+    tier?: 'free' | 'pro';
+    status?: string;
+    provider?: string;
+    razorpayCustomerId?: string;
+    razorpaySubscriptionId?: string;
+    razorpayOrderId?: string;
+    razorpayPaymentId?: string;
+    razorpayPlanId?: string;
+    currentPeriodStart?: string | Date;
+    currentPeriodEnd?: string | Date | null;
+    cancelAtPeriodEnd?: boolean;
+    cancelledAt?: string | Date;
+    updatedAt?: string | Date;
+    [key: string]: unknown;
+  }
 ): Promise<void> {
   if (!userId) throw new Error('User ID is required');
-  
+
   try {
-    const subRef = doc(db, 'subscriptions', userId);
-    const now = new Date().toISOString();
-    
-    const subSnap = await getDoc(subRef);
-    
-    if (subSnap.exists()) {
-      // Update existing
-      await updateDoc(subRef, {
-        ...data,
-        updatedAt: now,
-      });
-    } else {
-      // Create new
-      await setDoc(subRef, {
-        uid: userId,
-        tier: 'free',
-        status: 'inactive',
-        createdAt: now,
-        updatedAt: now,
-        ...data,
-      });
+    // Map to Prisma-compatible types
+    const prismaData: Record<string, unknown> = {};
+
+    if (data.tier !== undefined) {
+      prismaData.tier = data.tier === 'pro' ? 'PRO' : 'FREE';
     }
+    if (data.status !== undefined) {
+      const statusMap: Record<string, string> = {
+        active: 'ACTIVE',
+        expired: 'EXPIRED',
+        cancelled: 'CANCELLED',
+        canceled: 'CANCELLED',
+        inactive: 'EXPIRED',
+        past_due: 'PAST_DUE',
+        trialing: 'ACTIVE',
+      };
+      prismaData.status = statusMap[data.status] || 'ACTIVE';
+    }
+    if (data.razorpayCustomerId !== undefined) prismaData.razorpayCustomerId = data.razorpayCustomerId;
+    if (data.razorpaySubscriptionId !== undefined) prismaData.razorpaySubscriptionId = data.razorpaySubscriptionId;
+    if (data.razorpayOrderId !== undefined) prismaData.razorpayOrderId = data.razorpayOrderId;
+    if (data.razorpayPaymentId !== undefined) prismaData.razorpayPaymentId = data.razorpayPaymentId;
+    if (data.currentPeriodStart !== undefined) {
+      prismaData.currentPeriodStart = data.currentPeriodStart ? new Date(data.currentPeriodStart as string) : null;
+    }
+    if (data.currentPeriodEnd !== undefined) {
+      prismaData.currentPeriodEnd = data.currentPeriodEnd ? new Date(data.currentPeriodEnd as string) : null;
+    }
+    if (data.cancelAtPeriodEnd !== undefined) prismaData.cancelAtPeriodEnd = data.cancelAtPeriodEnd;
+    if (data.cancelledAt !== undefined) {
+      prismaData.cancelledAt = data.cancelledAt ? new Date(data.cancelledAt as string) : null;
+    }
+
+    await prisma.subscription.upsert({
+      where: { userId },
+      update: prismaData,
+      create: {
+        userId,
+        tier: (prismaData.tier as 'FREE' | 'PRO') || 'FREE',
+        status: (prismaData.status as 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'PAST_DUE') || 'ACTIVE',
+        razorpayCustomerId: prismaData.razorpayCustomerId as string | undefined,
+        razorpaySubscriptionId: prismaData.razorpaySubscriptionId as string | undefined,
+        razorpayOrderId: prismaData.razorpayOrderId as string | undefined,
+        razorpayPaymentId: prismaData.razorpayPaymentId as string | undefined,
+        currentPeriodStart: prismaData.currentPeriodStart as Date | undefined,
+        currentPeriodEnd: prismaData.currentPeriodEnd as Date | undefined,
+        cancelAtPeriodEnd: (prismaData.cancelAtPeriodEnd as boolean) || false,
+        cancelledAt: prismaData.cancelledAt as Date | undefined,
+      },
+    });
   } catch (error) {
     console.error('Error updating subscription:', error);
     throw new Error('Could not update subscription');
@@ -170,34 +202,32 @@ export async function activateProSubscription(
     periodEnd?: string;
   }
 ): Promise<void> {
-  const now = new Date().toISOString();
-  
-  const updateData: Partial<SubscriptionDoc> = {
+  const now = new Date();
+
+  const updateData: Record<string, unknown> = {
     tier: 'pro',
     status: 'active',
-    provider,
-    currentPeriodStart: providerData.periodStart || now,
+    currentPeriodStart: providerData.periodStart || now.toISOString(),
     currentPeriodEnd: providerData.periodEnd,
     cancelAtPeriodEnd: false,
-    updatedAt: now,
   };
-  
+
   if (provider === 'razorpay') {
     updateData.razorpayCustomerId = providerData.customerId;
     updateData.razorpaySubscriptionId = providerData.subscriptionId;
-    updateData.razorpayPlanId = providerData.planId;
   }
-  
+
   await updateSubscription(userId, updateData);
 }
 
 /**
- * Cancel subscription (will expire at period end)
+ * Cancel subscription
  */
 export async function cancelSubscription(userId: string): Promise<void> {
   await updateSubscription(userId, {
     cancelAtPeriodEnd: true,
     status: 'canceled',
+    cancelledAt: new Date().toISOString(),
   });
 }
 
@@ -207,39 +237,22 @@ export async function cancelSubscription(userId: string): Promise<void> {
 export async function downgradeToFree(userId: string): Promise<void> {
   await updateSubscription(userId, {
     tier: 'free',
-    status: 'inactive',
+    status: 'expired',
     cancelAtPeriodEnd: false,
-    currentPeriodEnd: undefined,
   });
 }
 
 /**
  * Find subscription by Razorpay subscription ID
- * Used by webhook handlers to find which user a subscription belongs to
  */
-export async function getSubscriptionByRazorpayId(
-  razorpaySubscriptionId: string
-): Promise<(SubscriptionDoc & { uid: string }) | null> {
+export async function getSubscriptionByRazorpayId(razorpaySubscriptionId: string) {
   if (!razorpaySubscriptionId) return null;
-  
+
   try {
-    const subscriptionsRef = collection(db, 'subscriptions');
-    const q = query(
-      subscriptionsRef,
-      where('razorpaySubscriptionId', '==', razorpaySubscriptionId)
-    );
-    
-    const querySnapshot = await getDocs(q);
-    
-    if (querySnapshot.empty) {
-      return null;
-    }
-    
-    const docSnap = querySnapshot.docs[0];
-    return {
-      ...(docSnap.data() as SubscriptionDoc),
-      uid: docSnap.id,
-    };
+    const subscription = await prisma.subscription.findFirst({
+      where: { razorpaySubscriptionId },
+    });
+    return subscription;
   } catch (error) {
     console.error('Error finding subscription by Razorpay ID:', error);
     return null;
@@ -248,29 +261,22 @@ export async function getSubscriptionByRazorpayId(
 
 // ============ Feature Access Control ============
 
-/**
- * Check if a feature is allowed for the given tier
- */
 export function isFeatureAllowed(tier: SubscriptionTier, feature: AIFeature): boolean {
   const limits = TIER_LIMITS[tier];
   return limits.allowedFeatures.includes(feature);
 }
 
-/**
- * Check if user can access a specific feature
- * Returns detailed result with reason if denied
- */
 export async function checkFeatureAccess(
   userId: string,
   feature: AIFeature
 ): Promise<FeatureAccessResult> {
   const tier = await getUserTier(userId);
   const allowed = isFeatureAllowed(tier, feature);
-  
+
   if (allowed) {
     return { allowed: true, currentTier: tier };
   }
-  
+
   return {
     allowed: false,
     reason: `${FEATURE_DISPLAY_NAMES[feature]} requires a Pro subscription`,
@@ -280,16 +286,12 @@ export async function checkFeatureAccess(
   };
 }
 
-/**
- * Assert feature access - throws if not allowed
- * Use in server actions for gating
- */
 export async function assertFeatureAllowed(
   userId: string,
   feature: AIFeature
 ): Promise<SubscriptionTier> {
   const result = await checkFeatureAccess(userId, feature);
-  
+
   if (!result.allowed) {
     const error = new Error(result.reason || 'Feature not available') as Error & {
       code: string;
@@ -301,93 +303,76 @@ export async function assertFeatureAllowed(
     error.currentTier = result.currentTier || 'free';
     throw error;
   }
-  
+
   return result.currentTier || 'free';
 }
 
 // ============ Export Usage Tracking ============
 
-/**
- * Get daily export usage from Firestore
- */
 export async function getDailyExportUsage(userId: string): Promise<DailyExportUsage> {
   if (!userId) {
     return { date: getCurrentDateString(), count: 0, updatedAt: new Date().toISOString() };
   }
-  
+
   try {
-    const usageRef = doc(db, 'usage', userId, 'exports', 'daily');
-    const usageSnap = await getDoc(usageRef);
-    
-    if (usageSnap.exists()) {
-      const data = usageSnap.data() as DailyExportUsage;
-      const today = getCurrentDateString();
-      
-      // Reset if it's a new day
-      if (data.date !== today) {
-        return { date: today, count: 0, updatedAt: new Date().toISOString() };
-      }
-      
-      return data;
-    }
-    
-    return { date: getCurrentDateString(), count: 0, updatedAt: new Date().toISOString() };
+    const today = getStartOfToday();
+    const usage = await prisma.usageRecord.findUnique({
+      where: {
+        userId_feature_date: {
+          userId,
+          feature: 'export',
+          date: today,
+        },
+      },
+    });
+
+    return {
+      date: getCurrentDateString(),
+      count: usage?.count || 0,
+      updatedAt: usage?.createdAt.toISOString() || new Date().toISOString(),
+    };
   } catch (error) {
     console.error('Error getting export usage:', error);
     return { date: getCurrentDateString(), count: 0, updatedAt: new Date().toISOString() };
   }
 }
 
-/**
- * Increment daily export usage (with transaction for race condition prevention)
- * Returns the new count
- */
 export async function incrementDailyExportUsage(userId: string): Promise<number> {
   if (!userId) return 0;
-  
+
   try {
-    const usageRef = doc(db, 'usage', userId, 'exports', 'daily');
-    const today = getCurrentDateString();
-    const now = new Date().toISOString();
-    
-    const newCount = await runTransaction(db, async (tx) => {
-      const usageSnap = await tx.get(usageRef);
-      
-      let currentCount = 0;
-      if (usageSnap.exists()) {
-        const data = usageSnap.data() as DailyExportUsage;
-        if (data.date === today) {
-          currentCount = data.count;
-        }
-      }
-      
-      const nextCount = currentCount + 1;
-      
-      tx.set(usageRef, {
+    const today = getStartOfToday();
+
+    const record = await prisma.usageRecord.upsert({
+      where: {
+        userId_feature_date: {
+          userId,
+          feature: 'export',
+          date: today,
+        },
+      },
+      update: {
+        count: { increment: 1 },
+      },
+      create: {
+        userId,
+        feature: 'export',
+        count: 1,
         date: today,
-        count: nextCount,
-        updatedAt: now,
-      });
-      
-      return nextCount;
+      },
     });
-    
-    return newCount;
+
+    return record.count;
   } catch (error) {
     console.error('Error incrementing export usage:', error);
     throw new Error('Could not track export usage');
   }
 }
 
-/**
- * Check and enforce daily export limit
- * Returns result with remaining exports
- */
 export async function checkExportLimit(userId: string): Promise<UsageLimitResult> {
   const tier = await getUserTier(userId);
   const limits = TIER_LIMITS[tier];
-  
-  // Unlimited exports for pro
+
   if (limits.dailyExports === -1) {
     return {
       allowed: true,
@@ -398,10 +383,10 @@ export async function checkExportLimit(userId: string): Promise<UsageLimitResult
       limitType: 'daily',
     };
   }
-  
+
   const usage = await getDailyExportUsage(userId);
   const remaining = Math.max(0, limits.dailyExports - usage.count);
-  
+
   return {
     allowed: usage.count < limits.dailyExports,
     used: usage.count,
@@ -412,20 +397,16 @@ export async function checkExportLimit(userId: string): Promise<UsageLimitResult
   };
 }
 
-/**
- * Enforce export limit - throws if exceeded
- * Also increments usage if allowed
- */
 export async function enforceExportLimit(userId: string): Promise<void> {
   const result = await checkExportLimit(userId);
-  
+
   if (!result.allowed) {
     const resetTime = result.resetAt.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: true,
     });
-    
+
     const error = new Error(
       `Daily export limit reached! You've used all ${result.limit} exports for today. ` +
       `Your limit resets at ${resetTime}. Upgrade to Pro for unlimited exports.`
@@ -441,68 +422,77 @@ export async function enforceExportLimit(userId: string): Promise<void> {
     error.upgradeRequired = true;
     throw error;
   }
-  
+
   // Increment usage after allowing
   await incrementDailyExportUsage(userId);
 }
 
 // ============ Aggregated Subscription State ============
 
-/**
- * Get full subscription state for frontend
- * Includes tier, usage, limits, and billing info
- */
 export async function getSubscriptionState(userId: string): Promise<SubscriptionState> {
   const [subscription, exportUsage] = await Promise.all([
     getSubscription(userId),
     getDailyExportUsage(userId),
   ]);
-  
-  // Determine effective tier
+
   let tier: SubscriptionTier = 'free';
   let status: SubscriptionStatus = 'inactive';
-  
+
   if (subscription) {
-    tier = subscription.tier;
-    status = subscription.status;
-    
+    tier = subscription.tier === 'PRO' ? 'pro' : 'free';
+    const statusMap: Record<string, SubscriptionStatus> = {
+      ACTIVE: 'active',
+      EXPIRED: 'inactive',
+      CANCELLED: 'canceled',
+      PAST_DUE: 'past_due',
+    };
+    status = statusMap[subscription.status] || 'inactive';
+
     // Check if still within billing period for canceled/past_due
     if ((status === 'canceled' || status === 'past_due') && subscription.currentPeriodEnd) {
-      const periodEnd = new Date(subscription.currentPeriodEnd);
-      if (periodEnd < new Date()) {
+      if (subscription.currentPeriodEnd < new Date()) {
         tier = 'free';
         status = 'inactive';
       }
     }
   }
-  
+
   const limits = TIER_LIMITS[tier];
   const resetAt = getNextMidnight();
-  
-  // Get AI usage from user profile (reuse existing tracking)
-  // We'll fetch this from the existing apiUsage field
+
+  // Get AI usage from UsageRecord table
   let dailyAICreditsUsed = 0;
   try {
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-      const userData = userSnap.data();
-      const apiUsage = userData.apiUsage || {};
-      const today = getCurrentDateString();
-      if (apiUsage.dailyDate === today) {
-        dailyAICreditsUsed = apiUsage.dailyCount || 0;
-      }
-    }
+    const today = getStartOfToday();
+    const aiFeatures = [
+      'analyze-resume',
+      'improve-resume',
+      'generate-qa',
+      'generate-questions',
+      'generate-cover-letter',
+      'parse-resume',
+    ];
+
+    const usage = await prisma.usageRecord.aggregate({
+      where: {
+        userId,
+        date: today,
+        feature: { in: aiFeatures },
+      },
+      _sum: { count: true },
+    });
+
+    dailyAICreditsUsed = usage._sum.count || 0;
   } catch (error) {
     console.error('Error fetching AI usage:', error);
   }
-  
+
   const dailyAICreditsRemaining = Math.max(0, limits.dailyAICredits - dailyAICreditsUsed);
   const dailyExportsUsed = exportUsage.count;
-  const dailyExportsRemaining = limits.dailyExports === -1 
-    ? -1 
+  const dailyExportsRemaining = limits.dailyExports === -1
+    ? -1
     : Math.max(0, limits.dailyExports - dailyExportsUsed);
-  
+
   return {
     tier,
     status,
@@ -511,30 +501,18 @@ export async function getSubscriptionState(userId: string): Promise<Subscription
     dailyExportsUsed,
     dailyExportsRemaining,
     limits,
-    currentPeriodEnd: subscription?.currentPeriodEnd 
-      ? (typeof subscription.currentPeriodEnd === 'string' 
-          ? subscription.currentPeriodEnd 
-          : subscription.currentPeriodEnd instanceof Date 
-            ? subscription.currentPeriodEnd.toISOString() 
-            : undefined)
-      : undefined,
+    currentPeriodEnd: subscription?.currentPeriodEnd?.toISOString(),
     cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd,
     resetAt,
   };
 }
 
-// ============ Tier-Aware Rate Limiting ============
+// ============ Helpers ============
 
-/**
- * Get daily AI credit limit for a tier
- */
 export function getDailyAILimit(tier: SubscriptionTier): number {
   return TIER_LIMITS[tier].dailyAICredits;
 }
 
-/**
- * Check if user is on Pro tier (helper for quick checks)
- */
 export async function isProUser(userId: string): Promise<boolean> {
   const tier = await getUserTier(userId);
   return tier === 'pro';
