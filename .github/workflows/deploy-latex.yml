@@ -1,0 +1,46 @@
+name: Deploy Resume LaTeX Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/resume-latex-service/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy on DigitalOcean Droplet
+        run: |
+          ssh ${{ secrets.DO_USER }}@${{ secrets.DO_HOST }} << 'EOF'
+            set -e
+            cd /opt/resume-latex-service/Resume-Buddy_v2
+            git pull origin main
+
+            cd services/resume-latex-service
+
+            docker build -t resume-latex-service .
+            docker stop latex-service || true
+            docker rm latex-service || true
+
+            docker run -d \
+              --name latex-service \
+              --restart unless-stopped \
+              --env-file .env \
+              -p 8080:8080 \
+              --memory=512m \
+              --cpus=1 \
+              resume-latex-service
+          EOF

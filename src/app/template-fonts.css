@@ -1,0 +1,154 @@
+/* Template-specific font configurations */
+
+/* Professional Template - Uses Inter (sans-serif) */
+.template-professional {
+  font-family: var(--font-inter);
+}
+
+.template-professional h1,
+.template-professional h2,
+.template-professional h3 {
+  font-family: var(--font-inter);
+}
+
+/* Modern Template - Uses Space Grotesk for headings, Inter for body */
+.template-modern {
+  font-family: var(--font-inter);
+}
+
+.template-modern h1,
+.template-modern h2,
+.template-modern h3 {
+  font-family: var(--font-space-grotesk);
+  font-weight: 700;
+}
+
+/* Creative Template - Uses Poppins */
+.template-creative {
+  font-family: var(--font-poppins);
+}
+
+.template-creative h1,
+.template-creative h2,
+.template-creative h3 {
+  font-family: var(--font-poppins);
+  font-weight: 700;
+}
+
+/* Minimal Template - Uses Montserrat with lighter weights */
+.template-minimal {
+  font-family: var(--font-montserrat);
+  font-weight: 400;
+}
+
+.template-minimal h1,
+.template-minimal h2,
+.template-minimal h3 {
+  font-family: var(--font-montserrat);
+  font-weight: 300;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.template-minimal p,
+.template-minimal li {
+  font-weight: 300;
+}
+
+/* Executive Template - Uses Playfair Display for headings, Work Sans for body */
+.template-executive {
+  font-family: var(--font-work-sans);
+}
+
+.template-executive h1,
+.template-executive h2,
+.template-executive h3 {
+  font-family: var(--font-playfair);
+  font-weight: 700;
+}
+
+/* Tech Template - Uses JetBrains Mono (monospace) */
+.template-tech {
+  font-family: var(--font-jetbrains);
+}
+
+.template-tech h1,
+.template-tech h2,
+.template-tech h3 {
+  font-family: var(--font-jetbrains);
+  font-weight: 600;
+}
+
+.template-tech .tech-comment {
+  font-family: var(--font-jetbrains);
+  font-weight: 400;
+  color: #6B7280; /* gray-500 */
+}
+
+/* FAANG Template - Uses Inter (sans-serif) */
+.template-faang {
+  font-family: var(--font-inter);
+}
+
+.template-faang h1,
+.template-faang h2,
+.template-faang h3 {
+  font-family: var(--font-inter);
+}
+
+/* Global font utility classes */
+.font-professional {
+  font-family: var(--font-inter);
+}
+
+.font-modern {
+  font-family: var(--font-inter);
+}
+
+.font-modern-heading {
+  font-family: var(--font-space-grotesk);
+}
+
+.font-creative {
+  font-family: var(--font-poppins);
+}
+
+.font-minimal {
+  font-family: var(--font-montserrat);
+}
+
+.font-minimal-light {
+  font-family: var(--font-montserrat);
+  font-weight: 300;
+}
+
+.font-executive {
+  font-family: var(--font-work-sans);
+}
+
+.font-executive-heading {
+  font-family: var(--font-playfair);
+}
+
+.font-tech {
+  font-family: var(--font-jetbrains);
+}
+
+.font-faang {
+  font-family: var(--font-inter);
+}
+
+/* Print-optimized font rendering */
+@media print {
+  .template-professional,
+  .template-modern,
+  .template-creative,
+  .template-minimal,
+  .template-executive,
+  .template-tech,
+  .template-faang {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}

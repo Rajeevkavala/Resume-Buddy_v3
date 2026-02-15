@@ -1,0 +1,424 @@
+/* Enhanced Resume Template Design System */
+
+/* Design Tokens */
+:root {
+  /* Colors */
+  --color-professional-primary: #1e3a8a;
+  --color-professional-secondary: #3b82f6;
+  --color-professional-accent: #dbeafe;
+  
+  --color-modern-primary: #3b82f6;
+  --color-modern-secondary: #1e40af;
+  --color-modern-accent: #60a5fa;
+  --color-modern-sidebar: #f8fafc;
+  
+  --color-creative-primary: #8b5cf6;
+  --color-creative-secondary: #ec4899;
+  --color-creative-accent: #f59e0b;
+  --color-creative-bg: #faf5ff;
+  
+  --color-minimal-text: #1a1a1a;
+  --color-minimal-light: #6b7280;
+  --color-minimal-subtle: #f9fafb;
+  
+  --color-executive-primary: #1f2937;
+  --color-executive-gold: #d4af37;
+  --color-executive-silver: #9ca3af;
+  
+  --color-tech-primary: #059669;
+  --color-tech-code: #374151;
+  --color-tech-bg: #f0fdf4;
+  
+  --color-faang-primary: #4285f4;
+  --color-faang-secondary: #34a853;
+  --color-faang-accent: #fbbc04;
+  
+  /* Typography Scale */
+  --font-size-xs: 0.625rem;    /* 10px */
+  --font-size-sm: 0.75rem;     /* 12px */
+  --font-size-base: 0.875rem;  /* 14px */
+  --font-size-lg: 1rem;        /* 16px */
+  --font-size-xl: 1.125rem;    /* 18px */
+  --font-size-2xl: 1.25rem;    /* 20px */
+  --font-size-3xl: 1.5rem;     /* 24px */
+  --font-size-4xl: 2rem;       /* 32px */
+  --font-size-5xl: 2.5rem;     /* 40px */
+  
+  /* Spacing Scale */
+  --space-xs: 0.25rem;   /* 4px */
+  --space-sm: 0.5rem;    /* 8px */
+  --space-md: 0.75rem;   /* 12px */
+  --space-lg: 1rem;      /* 16px */
+  --space-xl: 1.5rem;    /* 24px */
+  --space-2xl: 2rem;     /* 32px */
+  --space-3xl: 3rem;     /* 48px */
+  --space-4xl: 4rem;     /* 64px */
+  
+  /* Line Heights */
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.4;
+  --line-height-relaxed: 1.6;
+  
+  /* Font Weights */
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  
+  /* Border Radius */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
+/* Base Template Styles */
+.resume-template {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--color-minimal-text);
+  line-height: var(--line-height-normal);
+  background: white;
+}
+
+/* Enhanced Typography */
+.template-name {
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.025em;
+  margin-bottom: var(--space-sm);
+}
+
+.template-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-minimal-light);
+  margin-bottom: var(--space-md);
+}
+
+.template-section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-xs);
+  border-bottom: 2px solid currentColor;
+}
+
+.template-job-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-xs);
+}
+
+.template-company {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--space-xs);
+}
+
+.template-date {
+  font-size: var(--font-size-sm);
+  color: var(--color-minimal-light);
+  font-weight: var(--font-weight-medium);
+}
+
+.template-description {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-minimal-text);
+  margin-bottom: var(--space-xs);
+}
+
+/* Contact Information Styles */
+.template-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  align-items: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-minimal-light);
+}
+
+.template-contact-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.template-contact-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* Skills Styling */
+.template-skills-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-lg);
+}
+
+.template-skill-category {
+  margin-bottom: var(--space-md);
+}
+
+.template-skill-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.template-skill-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.template-skill-item {
+  background: var(--color-minimal-subtle);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-minimal-text);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Project Cards */
+.template-project {
+  padding: var(--space-lg);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-lg);
+  background: white;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.template-project:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.template-project-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-xs);
+}
+
+.template-project-tech {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
+}
+
+.template-project-tech-item {
+  background: var(--color-minimal-subtle);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Achievement Lists */
+.template-achievements {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-sm) 0;
+}
+
+.template-achievement {
+  position: relative;
+  padding-left: var(--space-lg);
+  margin-bottom: var(--space-xs);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.template-achievement::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: currentColor;
+  font-weight: var(--font-weight-bold);
+}
+
+/* Section Spacing */
+.template-section {
+  margin-bottom: var(--space-3xl);
+}
+
+.template-section:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive Grid Layouts */
+.template-two-column {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-3xl);
+}
+
+.template-sidebar {
+  padding: var(--space-2xl);
+}
+
+.template-main {
+  padding: var(--space-2xl);
+}
+
+/* Professional Theme Enhancements */
+.template-professional {
+  --primary-color: var(--color-professional-primary);
+  --secondary-color: var(--color-professional-secondary);
+  --accent-color: var(--color-professional-accent);
+}
+
+.template-professional .template-name {
+  color: var(--primary-color);
+}
+
+.template-professional .template-section-title {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+.template-professional .template-contact-icon {
+  color: var(--secondary-color);
+}
+
+/* Modern Theme Enhancements */
+.template-modern {
+  --primary-color: var(--color-modern-primary);
+  --secondary-color: var(--color-modern-secondary);
+  --accent-color: var(--color-modern-accent);
+}
+
+.template-modern .template-sidebar {
+  background: var(--color-modern-sidebar);
+}
+
+.template-modern .template-contact-icon {
+  color: var(--primary-color);
+}
+
+/* Creative Theme Enhancements */
+.template-creative {
+  --primary-color: var(--color-creative-primary);
+  --secondary-color: var(--color-creative-secondary);
+  --accent-color: var(--color-creative-accent);
+}
+
+.template-creative .template-name {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Print Optimizations */
+@media print {
+  .resume-template {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .template-project:hover {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .template-section {
+    page-break-inside: avoid;
+  }
+  
+  .template-name {
+    page-break-after: avoid;
+  }
+}
+
+/* Animation and Transitions */
+.template-fade-in {
+  animation: fadeIn 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Accessibility Enhancements */
+.template-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus States */
+.template-focusable:focus {
+  outline: 2px solid var(--color-modern-primary);
+  outline-offset: 2px;
+}
+
+/* Utility Classes */
+.template-text-primary { color: var(--primary-color); }
+.template-text-secondary { color: var(--secondary-color); }
+.template-text-accent { color: var(--accent-color); }
+.template-bg-primary { background-color: var(--primary-color); }
+.template-bg-secondary { background-color: var(--secondary-color); }
+.template-bg-accent { background-color: var(--accent-color); }
+
+.template-font-light { font-weight: var(--font-weight-light); }
+.template-font-normal { font-weight: var(--font-weight-normal); }
+.template-font-medium { font-weight: var(--font-weight-medium); }
+.template-font-semibold { font-weight: var(--font-weight-semibold); }
+.template-font-bold { font-weight: var(--font-weight-bold); }
+
+.template-text-xs { font-size: var(--font-size-xs); }
+.template-text-sm { font-size: var(--font-size-sm); }
+.template-text-base { font-size: var(--font-size-base); }
+.template-text-lg { font-size: var(--font-size-lg); }
+.template-text-xl { font-size: var(--font-size-xl); }
+.template-text-2xl { font-size: var(--font-size-2xl); }
+.template-text-3xl { font-size: var(--font-size-3xl); }
+.template-text-4xl { font-size: var(--font-size-4xl); }
+
+.template-space-xs { margin: var(--space-xs); }
+.template-space-sm { margin: var(--space-sm); }
+.template-space-md { margin: var(--space-md); }
+.template-space-lg { margin: var(--space-lg); }
+.template-space-xl { margin: var(--space-xl); }
+.template-space-2xl { margin: var(--space-2xl); }
+.template-space-3xl { margin: var(--space-3xl); }
+
+.template-mb-xs { margin-bottom: var(--space-xs); }
+.template-mb-sm { margin-bottom: var(--space-sm); }
+.template-mb-md { margin-bottom: var(--space-md); }
+.template-mb-lg { margin-bottom: var(--space-lg); }
+.template-mb-xl { margin-bottom: var(--space-xl); }
+.template-mb-2xl { margin-bottom: var(--space-2xl); }
+.template-mb-3xl { margin-bottom: var(--space-3xl); }

@@ -1,0 +1,198 @@
+version: '3.9'
+
+services:
+  # ============ PostgreSQL Database ============
+  postgres:
+    image: postgres:16-alpine
+    container_name: resumebuddy-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-resumebuddy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-resumebuddy}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-resumebuddy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - resumebuddy-network
+
+  # ============ Redis Cache + Sessions ============
+  redis:
+    image: redis:7-alpine
+    container_name: resumebuddy-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - resumebuddy-network
+
+  # ============ MinIO File Storage (S3-Compatible) ============
+  minio:
+    image: minio/minio:latest
+    container_name: resumebuddy-storage
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Console UI
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - resumebuddy-network
+
+  # ============ MinIO Setup (Create Default Bucket) ============
+  minio-setup:
+    image: minio/mc:latest
+    container_name: resumebuddy-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set resumebuddy http://minio:9000 $${MINIO_ACCESS_KEY:-minioadmin} $${MINIO_SECRET_KEY} &&
+      mc mb resumebuddy/$${MINIO_BUCKET:-resumebuddy} --ignore-existing &&
+      mc anonymous set download resumebuddy/$${MINIO_BUCKET:-resumebuddy}/public &&
+      echo 'MinIO bucket setup complete'
+      "
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+      MINIO_BUCKET: ${MINIO_BUCKET:-resumebuddy}
+    networks:
+      - resumebuddy-network
+
+  # ============ Next.js Web App ============
+  web:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.web
+    container_name: resumebuddy-web
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-resumebuddy}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-resumebuddy}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-resumebuddy}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      LATEX_SERVICE_URL: http://latex:8080
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:9002}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "9002:9002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - resumebuddy-network
+
+  # ============ WebSocket Server ============
+  websocket:
+    build:
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.websocket
+    container_name: resumebuddy-ws
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "3001:3001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - resumebuddy-network
+
+  # ============ LaTeX Service (Existing) ============
+  latex:
+    build:
+      context: ../../services/resume-latex-service
+      dockerfile: Dockerfile
+    container_name: resumebuddy-latex
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    networks:
+      - resumebuddy-network
+
+  # ============ Traefik Reverse Proxy (Production Only) ============
+  traefik:
+    image: traefik:v3.0
+    container_name: resumebuddy-proxy
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8081:8080"   # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    profiles:
+      - production
+    networks:
+      - resumebuddy-network
+
+volumes:
+  postgres_data:
+    name: resumebuddy_postgres_data
+  redis_data:
+    name: resumebuddy_redis_data
+  minio_data:
+    name: resumebuddy_minio_data
+  letsencrypt:
+    name: resumebuddy_letsencrypt
+
+networks:
+  resumebuddy-network:
+    name: resumebuddy-network
+    driver: bridge

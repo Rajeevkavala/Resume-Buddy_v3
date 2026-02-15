@@ -1,0 +1,7 @@
+{
+  "name": "token-estimator",
+  "version": "1.0.0",
+  "scripts": {
+    "estimate": "npx ts-node --project ../tsconfig.json token-estimator.ts"
+  }
+}

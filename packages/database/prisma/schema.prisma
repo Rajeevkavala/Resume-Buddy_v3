@@ -1,0 +1,99 @@
+// Prisma schema stub for Phase 1
+// Full schema will be implemented in Phase 2
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ User & Auth Models (Phase 1.2) ============
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  email           String    @unique @db.VarChar(255)
+  name            String?   @db.VarChar(255)
+  passwordHash    String?   @db.VarChar(255) @map("password_hash")
+  avatar          String?   @db.VarChar(500)
+  role            UserRole  @default(USER)
+  status          UserStatus @default(ACTIVE)
+  emailVerified   Boolean   @default(false) @map("email_verified")
+  lastLoginAt     DateTime? @map("last_login_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  accounts        Account[]
+  refreshTokens   RefreshToken[]
+  subscription    Subscription?
+
+  @@map("users")
+}
+
+model Account {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid @map("user_id")
+  provider          String   @db.VarChar(50)   // 'credentials' | 'google' | 'github'
+  providerAccountId String   @db.VarChar(255)  @map("provider_account_id")
+  accessToken       String?  @db.Text @map("access_token")
+  refreshToken      String?  @db.Text @map("refresh_token")
+  expiresAt         DateTime? @map("expires_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid()) @db.Uuid
+  token       String   @unique @db.VarChar(500)
+  userId      String   @db.Uuid @map("user_id")
+  expiresAt   DateTime @map("expires_at")
+  revoked     Boolean  @default(false)
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model Subscription {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @unique @db.Uuid @map("user_id")
+  tier              SubscriptionTier @default(FREE)
+  currentPeriodEnd  DateTime?        @map("current_period_end")
+  razorpayOrderId   String?          @db.VarChar(255) @map("razorpay_order_id")
+  razorpayPaymentId String?          @db.VarChar(255) @map("razorpay_payment_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// ============ Enums ============
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+}

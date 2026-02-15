@@ -1,0 +1,628 @@
+/* Print-specific styles for resume templates */
+
+@media print {
+  /* Page setup for A4 size */
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm; /* Standard margins for professional appearance */
+  }
+
+  /* Global print optimizations */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
+  html,
+  body {
+    width: 210mm;
+    margin: 0;
+    padding: 0;
+    font-size: 10pt; /* Standard readable font size */
+    line-height: 1.4; /* Standard line height for readability */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  /* Hide non-printable elements */
+  nav,
+  header,
+  footer,
+  button,
+  .no-print,
+  .print-hidden,
+  .sidebar,
+  .navigation,
+  .export-buttons,
+  .zoom-controls,
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  /* Resume container optimizations */
+  .resume-container {
+    page-break-inside: avoid !important;
+  }
+
+  /* Standard spacing for resume sections */
+  .resume-section {
+    margin-bottom: 12pt !important;
+  }
+
+  .resume-section:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  .resume-section:first-child {
+    margin-top: 0 !important;
+  }
+
+  /* Standard headers for professional appearance */
+  h1 {
+    font-size: 18pt !important;
+    margin-bottom: 6pt !important;
+    margin-top: 0 !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
+  }
+
+  h2 {
+    font-size: 13pt !important;
+    margin-bottom: 4pt !important;
+    margin-top: 8pt !important;
+    line-height: 1.2 !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+  }
+
+  h3 {
+    font-size: 11pt !important;
+    margin-bottom: 3pt !important;
+    margin-top: 5pt !important;
+    line-height: 1.2 !important;
+    font-weight: 600 !important;
+  }
+
+  /* Standard paragraphs and lists for readability */
+  p {
+    margin-bottom: 6pt !important;
+    margin-top: 0 !important;
+    line-height: 1.4 !important;
+  }
+
+  ul, ol {
+    margin-bottom: 6pt !important;
+    margin-top: 3pt !important;
+    padding-left: 15pt !important;
+  }
+
+  li {
+    margin-bottom: 2pt !important;
+    line-height: 1.4 !important;
+    padding-left: 3pt;
+  }
+
+  /* Optimize bullet points for space efficiency */
+  ul li::marker {
+    font-size: 0.8em;
+  }
+
+  /* Compact contact information and personal details */
+  .contact-info {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8pt !important;
+    margin-bottom: 4pt !important;
+  }
+
+  .contact-info > * {
+    margin-right: 12pt !important;
+  }
+
+  /* Page break controls */
+  .page-break-before {
+    page-break-before: avoid !important;
+  }
+
+  .page-break-after {
+    page-break-after: avoid !important;
+  }
+
+  .page-break-inside {
+    page-break-inside: avoid !important;
+  }
+
+  .page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
+
+  /* Prevent awkward breaks */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+
+  p,
+  li,
+  img {
+    page-break-inside: avoid;
+  }
+
+  /* Keep related content together */
+  .resume-section,
+  .experience-item,
+  .education-item,
+  .project-item,
+  .skill-group {
+    page-break-inside: avoid;
+  }
+
+  /* Optimize colors for print */
+  .bg-gray-50,
+  .bg-gray-100,
+  .bg-blue-50,
+  .bg-purple-50 {
+    background-color: transparent !important;
+  }
+
+  /* Keep important backgrounds */
+  .template-creative .header-gradient {
+    background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%) !important;
+    color: white !important;
+  }
+
+  /* Ensure text is readable */
+  body {
+    color: #000 !important;
+    background: white !important;
+  }
+
+  /* Optimize borders for print */
+  .border,
+  .border-gray-200,
+  .border-gray-300 {
+    border-color: #d1d5db !important;
+  }
+
+  /* Standard font sizes for readability */
+  .text-xs {
+    font-size: 8pt !important;
+  }
+
+  .text-sm {
+    font-size: 9pt !important;
+  }
+
+  .text-base {
+    font-size: 10pt !important;
+  }
+
+  .text-lg {
+    font-size: 11pt !important;
+  }
+
+  .text-xl {
+    font-size: 12pt !important;
+  }
+
+  .text-2xl {
+    font-size: 14pt !important;
+  }
+
+  .text-3xl {
+    font-size: 16pt !important;
+  }
+
+  .text-4xl {
+    font-size: 18pt !important;
+  }
+
+  /* Specific optimizations for resume sections */
+  .name-header {
+    font-size: 16pt !important;
+    font-weight: 700 !important;
+    margin-bottom: 2pt !important;
+  }
+
+  .section-title {
+    font-size: 13pt !important;
+    font-weight: 600 !important;
+    margin-bottom: 4pt !important;
+    margin-top: 8pt !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    border-bottom: 1pt solid #333 !important;
+    padding-bottom: 2pt !important;
+  }
+
+  .job-title, .education-degree {
+    font-size: 11pt !important;
+    font-weight: 600 !important;
+    margin-bottom: 3pt !important;
+  }
+
+  .company-name, .school-name {
+    font-size: 10pt !important;
+    font-weight: 500 !important;
+  }
+
+  .date-range, .location {
+    font-size: 9pt !important;
+    color: #666 !important;
+  }
+
+
+
+  /* Skills section optimization */
+  .skills-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 4pt !important;
+    margin-bottom: 4pt !important;
+  }
+
+  .skill-category {
+    margin-bottom: 2pt !important;
+  }
+
+  .skill-list {
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Experience section styling */
+  .experience-item {
+    margin-bottom: 12pt !important;
+  }
+
+  .experience-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    margin-bottom: 3pt !important;
+  }
+
+  .experience-achievements {
+    margin-top: 3pt !important;
+  }
+
+  .experience-achievements li {
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    margin-bottom: 2pt !important;
+  }
+
+  /* Education section styling */
+  .education-item {
+    margin-bottom: 8pt !important;
+  }
+
+  .education-details {
+    display: flex !important;
+    justify-content: space-between !important;
+    font-size: 8pt !important;
+  }
+
+  /* Projects section optimization */
+  .projects-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 4pt !important;
+  }
+
+  .project-item {
+    margin-bottom: 3pt !important;
+  }
+
+  .project-title {
+    font-size: 8.5pt !important;
+    font-weight: 600 !important;
+    margin-bottom: 0.5pt !important;
+  }
+
+  .project-description {
+    font-size: 7.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Summary section optimization */
+  .professional-summary {
+    font-size: 8.5pt !important;
+    line-height: 1.3 !important;
+    margin-bottom: 6pt !important;
+    text-align: justify !important;
+  }
+
+  /* Spacing adjustments for print */
+  .mb-8,
+  .my-8 {
+    margin-bottom: 8mm !important;
+  }
+
+  .mb-6,
+  .my-6 {
+    margin-bottom: 6mm !important;
+  }
+
+  .mb-4,
+  .my-4 {
+    margin-bottom: 4mm !important;
+  }
+
+  .mt-8 {
+    margin-top: 8mm !important;
+  }
+
+  .mt-6 {
+    margin-top: 6mm !important;
+  }
+
+  .mt-4 {
+    margin-top: 4mm !important;
+  }
+
+  /* Remove shadows for print */
+  .shadow,
+  .shadow-sm,
+  .shadow-md,
+  .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  /* Optimize links for print */
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  a[href^="http"]:after {
+    content: none !important;
+  }
+
+  /* Professional Template - Print optimizations */
+  .template-professional {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  .template-professional .border {
+    border-width: 1pt !important;
+  }
+
+  /* Modern Template - Print optimizations */
+  .template-modern {
+    display: block !important;
+  }
+
+  .template-modern .grid {
+    display: block !important;
+  }
+
+  .template-modern .sidebar {
+    display: block !important;
+    width: 100% !important;
+    background-color: #f9fafb !important;
+    padding: 4mm !important;
+    margin-bottom: 4mm !important;
+    border: 1pt solid #e5e7eb !important;
+  }
+
+  /* Creative Template - Print optimizations */
+  .template-creative .gradient-header {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .template-creative .timeline-dot {
+    border: 2pt solid currentColor !important;
+  }
+
+  /* Minimal Template - Print optimizations */
+  .template-minimal {
+    padding: 8mm 0 !important;
+  }
+
+  .template-minimal .text-center {
+    text-align: center !important;
+  }
+
+  /* Executive Template - Print optimizations */
+  .template-executive .grid {
+    display: block !important;
+  }
+
+  .template-executive .sidebar {
+    display: block !important;
+    width: 100% !important;
+    padding: 4mm !important;
+    margin-bottom: 4mm !important;
+    border-left: 2pt solid #1e3a8a !important;
+  }
+
+  /* Tech Template - Print optimizations */
+  .template-tech {
+    font-family: 'Courier New', monospace !important;
+  }
+
+  .template-tech .code-comment {
+    color: #6b7280 !important;
+  }
+
+  .template-tech .border {
+    border-width: 1pt !important;
+  }
+
+  /* Ensure proper rendering */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Optimize tables if any */
+  table {
+    border-collapse: collapse !important;
+  }
+
+  table,
+  th,
+  td {
+    border: 1pt solid #d1d5db !important;
+  }
+
+  /* Force single column layout for print */
+  .grid-cols-2,
+  .grid-cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Remove hover effects */
+  *:hover {
+    background-color: inherit !important;
+    color: inherit !important;
+  }
+
+  /* Optimize whitespace */
+  .container,
+  .max-w-4xl,
+  .max-w-5xl {
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Prevent content cutoff */
+  .overflow-hidden {
+    overflow: visible !important;
+  }
+
+  /* Ensure icons print correctly */
+  svg {
+    width: 12pt !important;
+    height: 12pt !important;
+  }
+
+  /* Optimize bullet points */
+  ul {
+    list-style-type: disc !important;
+    margin-left: 5mm !important;
+  }
+
+  ol {
+    list-style-type: decimal !important;
+    margin-left: 5mm !important;
+  }
+
+  li {
+    margin-bottom: 1mm !important;
+  }
+
+  /* Ensure proper text wrapping */
+  p,
+  span,
+  div {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* Optimize margins for print */
+  .print-optimize {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force black text for certain elements */
+  h1,
+  h2,
+  h3,
+  .text-black {
+    color: #000 !important;
+  }
+
+  /* Ensure sufficient contrast */
+  .text-gray-600,
+  .text-gray-700 {
+    color: #374151 !important;
+  }
+
+  .text-gray-500 {
+    color: #6b7280 !important;
+  }
+
+  /* Optimize skills section for print */
+  .skill-badge,
+  .skill-tag {
+    display: inline-block !important;
+    border: 1pt solid #d1d5db !important;
+    padding: 1mm 2mm !important;
+    margin: 1mm !important;
+    background: white !important;
+  }
+
+  /* Ensure proper page breaks between major sections */
+  .resume-header {
+    page-break-after: avoid !important;
+  }
+
+  .resume-summary {
+    page-break-after: avoid !important;
+  }
+
+  /* Keep experience items together */
+  .experience-entry {
+    page-break-inside: avoid !important;
+    margin-bottom: 4mm !important;
+  }
+
+  /* Optimize contact information */
+  .contact-info {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 2mm !important;
+  }
+
+  .contact-item {
+    display: inline-flex !important;
+    align-items: center !important;
+    margin-right: 4mm !important;
+  }
+
+  /* Remove animations and transitions */
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Ensure buttons don't break layout if visible */
+  button {
+    display: none !important;
+  }
+
+  /* Optimize spacing for compact print */
+  .print-compact .mb-8 {
+    margin-bottom: 4mm !important;
+  }
+
+  .print-compact .mb-6 {
+    margin-bottom: 3mm !important;
+  }
+
+  .print-compact .mb-4 {
+    margin-bottom: 2mm !important;
+  }
+
+
+}
+
+/* Print preview mode (when viewing in browser's print dialog) */
+@media screen and (prefers-color-scheme: print) {
+  body {
+    background: white !important;
+  }
+}

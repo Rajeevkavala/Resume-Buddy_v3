@@ -1,0 +1,553 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Professional Blue Theme - #2F68C8 */
+    --background: 210 20% 98%;
+    --foreground: 217 33% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 217 33% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 217 33% 17%;
+    /* Primary: Professional Blue #2F68C8 */
+    --primary: 217 63% 49%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 217 33% 17%;
+    --muted: 214 32% 91%;
+    --muted-foreground: 215 16% 47%;
+    /* Accent: Same blue for consistency */
+    --accent: 217 63% 49%;
+    --accent-foreground: 0 0% 100%;
+    /* Success: Professional green */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 63% 49%;
+    --radius: 0.5rem;
+    --chart-1: 217 63% 49%;
+    --chart-2: 142 71% 45%;
+    --chart-3: 217 33% 35%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+
+  .dark {
+    /* Dark Mode: Rich backgrounds with blue accents */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
+    /* Primary: Lighter blue for dark mode */
+    --primary: 217 72% 58%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    /* Accent: Lighter blue for dark mode */
+    --accent: 217 72% 58%;
+    --accent-foreground: 222 47% 6%;
+    /* Success */
+    --success: 142 71% 50%;
+    --success-foreground: 222 47% 6%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 217 72% 58%;
+    --chart-1: 217 72% 58%;
+    --chart-2: 142 71% 50%;
+    --chart-3: 217 33% 45%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html, body {
+    @apply overflow-x-hidden;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Enhanced skeleton loading animations */
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes skeleton-wave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-enhanced {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+
+.skeleton-enhanced::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--primary) / 0.08),
+    transparent
+  );
+  animation: skeleton-wave 1.8s ease-in-out infinite;
+}
+
+/* Spinner glow effect */
+@keyframes spinner-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px hsl(var(--primary) / 0);
+  }
+}
+
+.spinner-glow {
+  animation: spinner-glow 1.5s ease-in-out infinite;
+}
+
+/* Page transition fade */
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: page-fade-in 0.3s ease-out forwards;
+}
+
+/* Auth card animation */
+@keyframes auth-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-card {
+  animation: auth-fade-in 0.5s ease-out;
+}
+
+/* Input error shake animation */
+@keyframes input-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.input-error {
+  animation: input-shake 0.3s ease-out;
+}
+
+/* Navbar entry animation */
+@keyframes navbar-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.navbar-animate {
+  animation: navbar-slide-in 0.4s ease-out;
+}
+
+/* Active nav item underline indicator */
+@keyframes underline-grow {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.nav-active-indicator {
+  animation: underline-grow 0.2s ease-out forwards;
+}
+
+/* Status indicator pulse animations */
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-warning {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+.status-critical {
+  animation: status-pulse 1s ease-in-out infinite;
+}
+
+/* Grid pattern for landing page hero section */
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Noise/Grain texture for authentic design */
+.noise-bg {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+}
+
+/* PDF Preview - Hide scrollbars */
+.pdf-preview-container {
+  overflow: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.pdf-preview-container::-webkit-scrollbar {
+  display: none;
+}
+
+.pdf-preview-container iframe,
+.pdf-preview-container object {
+  overflow: hidden !important;
+}
+
+.pdf-preview-container iframe::-webkit-scrollbar,
+.pdf-preview-container object::-webkit-scrollbar {
+  display: none;
+}
+
+/* Typography scale classes */
+.text-display {
+  @apply text-5xl md:text-6xl lg:text-7xl font-headline font-bold tracking-tight leading-[0.95];
+}
+
+.text-hero {
+  @apply text-4xl md:text-5xl lg:text-6xl font-headline font-bold tracking-tight;
+}
+
+.text-section {
+  @apply text-3xl md:text-4xl font-headline font-semibold;
+}
+
+.text-card-title {
+  @apply text-xl font-headline font-semibold;
+}
+
+.text-stat {
+  @apply text-5xl md:text-6xl font-accent font-bold tabular-nums;
+}
+
+/* Marquee animation for logos */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes marquee2 {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee2 {
+  animation: marquee2 30s linear infinite;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom gradient animations */
+@keyframes gradient-x {
+  0%, 100% {
+    transform: translateX(0%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes gradient-y {
+  0%, 100% {
+    transform: translateY(0%);
+  }
+  50% {
+    transform: translateY(100%);
+  }
+}
+
+/* Enhanced blue theme animations */
+@keyframes pulse-blue {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Utility classes for animations */
+.animate-slide-up {
+  animation: slide-up 0.6s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+
+.animate-pulse-blue {
+  animation: pulse-blue 2s infinite;
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Enhanced button hover effects */
+.btn-blue-enhanced {
+  @apply bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98];
+}
+
+/* Card hover effects */
+.card-hover-blue {
+  @apply transition-all duration-300 hover:shadow-lg hover:shadow-blue-100/50 hover:-translate-y-1;
+}
+
+/* Progress bar styles */
+.progress-blue {
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8, #1e40af);
+  background-size: 200% 100%;
+  animation: gradient-x 3s ease infinite;
+}
+
+@keyframes gradient-xy {
+  0%, 100% {
+    transform: translate(0%, 0%);
+  }
+  25% {
+    transform: translate(100%, 0%);
+  }
+  50% {
+    transform: translate(100%, 100%);
+  }
+  75% {
+    transform: translate(0%, 100%);
+  }
+}
+
+.animate-gradient-x {
+  animation: gradient-x 15s ease infinite;
+}
+
+.animate-gradient-y {
+  animation: gradient-y 15s ease infinite;
+}
+
+.animate-gradient-xy {
+  animation: gradient-xy 15s ease infinite;
+}
+
+/* Custom backdrop blur */
+.backdrop-blur-strong {
+  backdrop-filter: blur(20px);
+}
+
+/* Glassmorphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-dark {
+  background: rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Improved text gradients */
+.text-gradient-blue-purple {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-rainbow {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  background-size: 200% 200%;
+  animation: gradient-x 3s ease infinite;
+}
+
+/* Custom shadows */
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+}
+
+.shadow-glow-purple {
+  box-shadow: 0 0 20px rgba(147, 51, 234, 0.5);
+}
+
+/* Improved scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+}
+
+/* Blob animations for auth pages */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Industry compatibility progress bar animation */
+@keyframes slideIn {
+  0% {
+    width: 0%;
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Mobile scrollbar hide utility */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
