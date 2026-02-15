@@ -20,6 +20,7 @@ const PROTECTED_ROUTES = [
   '/create-resume',
   '/billing', // Subscription management
   '/cover-letter', // Cover letter generator
+  '/resume-library', // Phase 4: Resume library
 ];
 
 // Admin-only routes

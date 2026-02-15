@@ -18,6 +18,7 @@ import {
   FileEdit,
   CreditCard,
   ChevronRight,
+  Library,
   FileText
 } from 'lucide-react';
 import { Icons } from '@/components/icons';
@@ -62,6 +63,7 @@ const navItemsWithIcons = [
   { href: '/improvement', label: 'Improvement', icon: TrendingUp, prefetch: true },
   { href: '/create-resume', label: 'Create Resume', icon: FileEdit, prefetch: true },
   { href: '/cover-letter', label: 'Cover Letter', icon: FileText, prefetch: true },
+  { href: '/resume-library', label: 'My Resumes', icon: Library, prefetch: true },
   { href: '/billing', label: 'Billing', icon: CreditCard, prefetch: true },
 ];
 

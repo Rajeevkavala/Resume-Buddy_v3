@@ -1,5 +1,5 @@
 // ============ Email Service ============
-// Dual-provider: Resend (primary) + Nodemailer SMTP (fallback)
+// Dual-provider: SMTP/Nodemailer (primary) + Resend (backup)
 
 export interface EmailMessage {
   to: string;
@@ -19,23 +19,23 @@ interface EmailSendResult {
 // ============ Main Send Function ============
 
 export async function sendEmail(message: EmailMessage): Promise<EmailSendResult> {
-  // Try Resend first
-  if (process.env.RESEND_API_KEY) {
-    try {
-      const result = await sendWithResend(message);
-      return { ...result, provider: 'resend' };
-    } catch (error) {
-      console.warn('[Email] Resend failed, trying Nodemailer fallback:', error);
-    }
-  }
-
-  // Fallback to Nodemailer/SMTP
+  // Try SMTP/Nodemailer first (primary)
   if (process.env.SMTP_HOST) {
     try {
       const result = await sendWithNodemailer(message);
       return { ...result, provider: 'nodemailer' };
     } catch (error) {
-      console.error('[Email] Nodemailer fallback also failed:', error);
+      console.warn('[Email] SMTP failed, trying Resend backup:', error);
+    }
+  }
+
+  // Backup: Resend API
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const result = await sendWithResend(message);
+      return { ...result, provider: 'resend' };
+    } catch (error) {
+      console.error('[Email] Resend backup also failed:', error);
     }
   }
 

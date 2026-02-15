@@ -1,5 +1,5 @@
 // ============ Email OTP Provider ============
-// Sends OTP codes via email using Resend API or Nodemailer fallback
+// Sends OTP codes via email using SMTP/Nodemailer (primary) or Resend API (backup)
 
 interface EmailSendResult {
   success: boolean;
@@ -8,24 +8,24 @@ interface EmailSendResult {
 
 /**
  * Send an OTP code via email.
- * Primary: Resend API. Fallback: SMTP via Nodemailer-compatible fetch.
+ * Primary: SMTP via Nodemailer. Backup: Resend API.
  */
 export async function sendEmailOTP(email: string, otp: string): Promise<EmailSendResult> {
-  // Try Resend first
-  if (process.env.RESEND_API_KEY) {
-    try {
-      return await sendWithResend(email, otp);
-    } catch (error) {
-      console.warn('[Email OTP] Resend failed, trying SMTP fallback:', error);
-    }
-  }
-
-  // Fallback: SMTP via fetch-based POST (e.g., to a local SMTP relay or API)
+  // Try SMTP first (primary)
   if (process.env.SMTP_HOST) {
     try {
       return await sendWithSMTP(email, otp);
     } catch (error) {
-      console.error('[Email OTP] SMTP fallback also failed:', error);
+      console.warn('[Email OTP] SMTP failed, trying Resend backup:', error);
+    }
+  }
+
+  // Backup: Resend API
+  if (process.env.RESEND_API_KEY) {
+    try {
+      return await sendWithResend(email, otp);
+    } catch (error) {
+      console.error('[Email OTP] Resend backup also failed:', error);
     }
   }
 
