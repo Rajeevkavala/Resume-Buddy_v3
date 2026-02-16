@@ -7,8 +7,7 @@
  * Uses Razorpay's REST API with Basic Auth.
  */
 
-import { db } from '@/lib/firebase';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { isAdmin as checkIsAdmin } from '@/lib/access-control';
 
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
@@ -89,18 +88,7 @@ function getAuthHeader(): string {
 }
 
 async function verifyAdmin(email: string): Promise<boolean> {
-  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(e => e.trim().toLowerCase()) || [];
-  if (adminEmails.includes(email.toLowerCase())) {
-    return true;
-  }
-  
-  try {
-    const adminRef = doc(db, 'admins', email.toLowerCase());
-    const adminDoc = await getDoc(adminRef);
-    return adminDoc.exists() && adminDoc.data()?.active === true;
-  } catch {
-    return false;
-  }
+  return checkIsAdmin(email);
 }
 
 // ============================================================================

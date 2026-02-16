@@ -15,6 +15,12 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   
+  // Standalone output for Docker deployments (smaller image, faster cold starts)
+  output: 'standalone',
+  
+  // Disable X-Powered-By header for security
+  poweredByHeader: false,
+  
   // Enable SWC minification for better performance
   swcMinify: true,
   
@@ -47,7 +53,7 @@ const nextConfig = {
     // Enable aggressive page static optimization
     optimizeCss: true,
     // Improve route prefetching
-    serverComponentsExternalPackages: ['firebase', 'firebase-admin', 'pdf-parse-fork'],
+    serverComponentsExternalPackages: ['pdf-parse-fork'],
     // Optimize server actions
     serverActions: {
       bodySizeLimit: '2mb',
@@ -164,7 +170,7 @@ const nextConfig = {
           },
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
+            value: 'DENY'
           },
           {
             key: 'X-Content-Type-Options',
@@ -172,11 +178,11 @@ const nextConfig = {
           },
           {
             key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin'
+            value: 'strict-origin-when-cross-origin'
           },
           {
             key: 'Strict-Transport-Security',
-            value: 'max-age=31536000; includeSubDomains'
+            value: 'max-age=63072000; includeSubDomains; preload'
           },
           {
             key: 'Permissions-Policy',

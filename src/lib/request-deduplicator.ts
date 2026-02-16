@@ -1,10 +1,14 @@
 /**
  * Request Deduplication System
  * Prevents duplicate concurrent requests for the same operation
+ * Includes a safety timeout to prevent memory leaks from hung requests.
  */
 
 // Track in-flight requests
 const inFlightRequests = new Map<string, Promise<unknown>>();
+
+// Maximum time an in-flight request can live before being cleaned up (2 minutes)
+const MAX_IN_FLIGHT_MS = 120_000;
 
 /**
  * Deduplicate concurrent requests with the same key
@@ -21,7 +25,6 @@ export async function deduplicateRequest<T>(
   // Check if request is already in flight
   const existing = inFlightRequests.get(key);
   if (existing) {
-    console.log(`⏳ Waiting for in-flight request: ${key.substring(0, 16)}...`);
     return existing as Promise<T>;
   }
 
@@ -30,8 +33,21 @@ export async function deduplicateRequest<T>(
     inFlightRequests.delete(key);
   });
 
+  // Safety timeout: auto-cleanup if the request hangs forever
+  const safetyTimeout = setTimeout(() => {
+    if (inFlightRequests.has(key)) {
+      inFlightRequests.delete(key);
+      console.warn(`[Deduplicator] Cleaned up stale request: ${key.substring(0, 16)}...`);
+    }
+  }, MAX_IN_FLIGHT_MS);
+
+  // Ensure the safety timeout doesn't prevent Node.js from exiting
+  if (safetyTimeout.unref) safetyTimeout.unref();
+
+  // Clear safety timeout when request completes normally
+  promise.finally(() => clearTimeout(safetyTimeout));
+
   inFlightRequests.set(key, promise);
-  console.log(`🚀 New request started: ${key.substring(0, 16)}...`);
   
   return promise;
 }

@@ -36,6 +36,41 @@ import type { SubscriptionDoc } from '@/lib/types/subscription';
 // Types
 // ============================================================================
 
+/** Map Prisma Subscription to SubscriptionDoc for frontend compatibility */
+function toSubscriptionDoc(sub: {
+  userId: string;
+  tier: string;
+  status: string;
+  razorpayCustomerId?: string | null;
+  razorpayOrderId?: string | null;
+  razorpayPaymentId?: string | null;
+  razorpaySubscriptionId?: string | null;
+  currentPeriodStart?: Date | null;
+  currentPeriodEnd?: Date | null;
+  cancelAtPeriodEnd: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): SubscriptionDoc {
+  return {
+    uid: sub.userId,
+    tier: sub.tier === 'PRO' ? 'pro' : 'free',
+    status: sub.status === 'ACTIVE' ? 'active' 
+      : sub.status === 'CANCELLED' ? 'canceled'
+      : sub.status === 'PAST_DUE' ? 'past_due'
+      : 'inactive',
+    provider: 'razorpay',
+    razorpayCustomerId: sub.razorpayCustomerId ?? undefined,
+    razorpayOrderId: sub.razorpayOrderId ?? undefined,
+    razorpayPaymentId: sub.razorpayPaymentId ?? undefined,
+    razorpaySubscriptionId: sub.razorpaySubscriptionId ?? undefined,
+    currentPeriodStart: sub.currentPeriodStart?.toISOString(),
+    currentPeriodEnd: sub.currentPeriodEnd?.toISOString() ?? null,
+    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    createdAt: sub.createdAt.toISOString(),
+    updatedAt: sub.updatedAt.toISOString(),
+  };
+}
+
 export interface CreateOrderResult {
   success?: boolean;
   orderId?: string;
@@ -228,10 +263,10 @@ export async function getSubscriptionInfoAction(
       };
     }
 
-    const subscription = await getFirestoreSubscription(userId);
+    const sub = await getFirestoreSubscription(userId);
     
     return {
-      subscription,
+      subscription: sub ? toSubscriptionDoc(sub) : null,
       razorpayKeyId: getRazorpayKeyId(),
       priceINR,
       durationDays,

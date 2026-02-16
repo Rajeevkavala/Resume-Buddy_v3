@@ -56,9 +56,8 @@ interface DashboardStats {
     adminUsers: number;
   };
   usage: {
-    totalRequests: number;
-    activeUsersToday: number;
-    topUsers: Array<{ uid: string; email: string; count: number }>;
+    totalCalls: number;
+    activeUsers: number;
   };
   weeklyUsage: Array<{ day: string; requests: number; users: number }>;
   subscriptionStats?: {
@@ -174,28 +173,27 @@ export default function AdminDashboard() {
       ]);
 
       // Transform historical data based on time range
-      const weeklyUsage = historicalResult.success && historicalResult.data?.dailyUsage
-        ? historicalResult.data.dailyUsage.map(day => {
-            const date = new Date(day.date);
-            // For short ranges show day names, for longer ranges show dates
-            const dayLabel = days <= 7 
-              ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]
-              : `${date.getMonth() + 1}/${date.getDate()}`;
-            return {
-              day: dayLabel,
-              requests: day.requests,
-              users: day.uniqueUsers,
-            };
-          })
+      const historicalData = historicalResult.success && Array.isArray(historicalResult.data)
+        ? historicalResult.data
         : [];
+      const weeklyUsage = historicalData.map((day: { date: string; calls: number; uniqueUsers: number }) => {
+        const date = new Date(day.date);
+        const dayLabel = days <= 7
+          ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]
+          : `${date.getMonth() + 1}/${date.getDate()}`;
+        return {
+          day: dayLabel,
+          requests: day.calls,
+          users: day.uniqueUsers,
+        };
+      });
 
       if (userStatsResult.success && usageStatsResult.success) {
         setStats({
           users: userStatsResult.data!,
           usage: {
-            totalRequests: usageStatsResult.data!.totalRequests,
-            activeUsersToday: usageStatsResult.data!.activeUsersToday,
-            topUsers: usageStatsResult.data!.topUsers,
+            totalCalls: usageStatsResult.data!.totalCalls,
+            activeUsers: usageStatsResult.data!.activeUsers,
           },
           weeklyUsage,
           subscriptionStats: subscriptionStatsResult.success ? subscriptionStatsResult.data : undefined,
@@ -555,7 +553,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Requests</p>
-                  <p className="text-2xl font-bold text-foreground">{stats?.usage.totalRequests || 0}</p>
+                  <p className="text-2xl font-bold text-foreground">{stats?.usage.totalCalls || 0}</p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-primary/10 text-primary">
@@ -569,7 +567,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Active Today</p>
-                  <p className="text-2xl font-bold text-foreground">{stats?.usage.activeUsersToday || 0}</p>
+                  <p className="text-2xl font-bold text-foreground">{stats?.usage.activeUsers || 0}</p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
@@ -579,47 +577,20 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Top Users */}
+        {/* Usage Breakdown */}
         <Card className="border bg-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <TrendingUp className="h-5 w-5 text-primary" />
-              Top Users
+              Usage Summary
             </CardTitle>
-            <CardDescription className="text-muted-foreground">Most active users by API usage</CardDescription>
+            <CardDescription className="text-muted-foreground">Overview of API usage metrics</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {stats?.usage.topUsers.slice(0, 5).map((topUser, index) => (
-                <div 
-                  key={topUser.uid} 
-                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`
-                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                      ${index === 0 ? 'bg-amber-500/20 text-amber-500' : 
-                        index === 1 ? 'bg-muted-foreground/20 text-muted-foreground' :
-                        index === 2 ? 'bg-orange-500/20 text-orange-500' :
-                        'bg-muted text-muted-foreground'}
-                    `}>
-                      {index + 1}
-                    </div>
-                    <span className="text-sm text-foreground truncate max-w-[180px]">
-                      {topUser.email}
-                    </span>
-                  </div>
-                  <Badge variant="secondary" className="bg-primary/10 text-primary font-mono">
-                    {topUser.count}
-                  </Badge>
-                </div>
-              ))}
-              {(!stats?.usage.topUsers || stats.usage.topUsers.length === 0) && (
-                <div className="text-center py-8">
-                  <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground">No usage data yet</p>
-                </div>
-              )}
+            <div className="text-center py-8">
+              <Activity className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+              <p className="text-lg font-semibold text-foreground">{stats?.usage.totalCalls || 0} total calls</p>
+              <p className="text-sm text-muted-foreground">{stats?.usage.activeUsers || 0} active users</p>
             </div>
           </CardContent>
         </Card>

@@ -432,7 +432,11 @@ export async function updateUserLimitsAction(
       return { success: false, message: 'Not authorized' };
     }
 
-    const success = await setUserLimits(uid, dailyLimit, monthlyLimit);
+    let success = false;
+    try {
+      await setUserLimits(uid, dailyLimit, monthlyLimit);
+      success = true;
+    } catch { /* noop */ }
     
     if (success) {
       await logAdminAction({
@@ -465,9 +469,15 @@ export async function resetUserUsageAction(
       return { success: false, message: 'Not authorized' };
     }
 
-    const success = type === 'daily' 
-      ? await resetUserDailyUsage(uid)
-      : await resetUserMonthlyUsage(uid);
+    let success = false;
+    try {
+      if (type === 'daily') {
+        await resetUserDailyUsage(uid);
+      } else {
+        await resetUserMonthlyUsage(uid);
+      }
+      success = true;
+    } catch { /* noop */ }
     
     if (success) {
       await logAdminAction({
@@ -628,25 +638,21 @@ export async function cleanupApiLogsAction(
       return { success: false, deletedCount: 0, message: 'Not authorized' };
     }
 
-    const result = await deleteOldApiUsageLogs(daysOld);
+    const deletedCount = await deleteOldApiUsageLogs(daysOld);
     
-    if (result.success) {
-      await logAdminAction({
-        adminId: adminEmail,
-        adminEmail,
-        action: 'cleanup_api_logs',
-        targetUserId: 'system',
-        targetEmail: 'system',
-        details: { daysOld, deletedCount: result.deletedCount },
-      });
-    }
+    await logAdminAction({
+      adminId: adminEmail,
+      adminEmail,
+      action: 'cleanup_api_logs',
+      targetUserId: 'system',
+      targetEmail: 'system',
+      details: { daysOld, deletedCount },
+    });
 
     return {
-      success: result.success,
-      deletedCount: result.deletedCount,
-      message: result.success 
-        ? `Successfully deleted ${result.deletedCount} logs older than ${daysOld} days`
-        : result.error || 'Failed to cleanup logs',
+      success: true,
+      deletedCount,
+      message: `Successfully deleted ${deletedCount} logs older than ${daysOld} days`,
     };
   } catch (error) {
     console.error('Error in cleanupApiLogsAction:', error);

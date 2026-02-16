@@ -10,6 +10,9 @@ import {
   type OTPPurpose,
 } from '@/lib/auth';
 import { setAuthCookies } from '@/lib/auth-cookies';
+import { resolveAvatarUrl } from '@/lib/avatar-url';
+import { sendWelcomeEmail } from '@/lib/email-notifications';
+import { enforceApiRateLimit } from '@/lib/api-rate-limiter';
 
 // ============ Request Schema ============
 
@@ -24,6 +27,10 @@ const verifyOTPSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 10 OTP verify attempts per 10 minutes per IP
+    const rateLimitResponse = await enforceApiRateLimit(request, 'auth-otp-verify');
+    if (rateLimitResponse) return rateLimitResponse;
+
     // 1. Parse and validate input
     const body = await request.json();
     const validated = verifyOTPSchema.safeParse(body);
@@ -116,6 +123,12 @@ export async function POST(request: NextRequest) {
         // Set cookies
         await setAuthCookies(sessionId, tokenPair.refreshToken);
 
+        // Send welcome email to new users (non-blocking)
+        const userIsNew = !user.name;
+        if (userIsNew && channel === 'email') {
+          sendWelcomeEmail(user.email, user.name || 'there').catch(() => {});
+        }
+
         return NextResponse.json({
           success: true,
           user: {
@@ -124,7 +137,7 @@ export async function POST(request: NextRequest) {
             name: user.name,
             role: user.role,
             tier,
-            avatar: user.avatar,
+            avatar: await resolveAvatarUrl(user.avatar),
             emailVerified: user.emailVerified,
             phoneVerified: user.phoneVerified,
             isNewUser: !user.name,

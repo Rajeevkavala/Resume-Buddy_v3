@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/firebase';
 import {
   cleanupOldLogs,
   emergencyCleanup,
@@ -68,14 +67,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, retentionDays } = body;
 
-    // For production, uncomment admin verification
-    // const isAdmin = await verifyAdmin(request);
-    // if (!isAdmin) {
-    //   return NextResponse.json(
-    //     { success: false, error: 'Unauthorized' },
-    //     { status: 401 }
-    //   );
-    // }
+    // Admin verification required for all cleanup actions
+    const isAdmin = await verifyAdmin(request);
+    if (!isAdmin) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
 
     let result;
 

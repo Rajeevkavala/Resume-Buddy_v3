@@ -15,6 +15,7 @@ interface HealthResponse {
   services: {
     database: ServiceStatus;
     redis: ServiceStatus;
+    storage: ServiceStatus;
     latex: ServiceStatus;
   };
 }
@@ -26,6 +27,7 @@ export async function GET() {
   const services: HealthResponse['services'] = {
     database: { status: 'unhealthy' },
     redis: { status: 'unhealthy' },
+    storage: { status: 'unhealthy' },
     latex: { status: 'unhealthy' },
   };
 
@@ -62,7 +64,30 @@ export async function GET() {
     };
   }
 
-  // 3. Check LaTeX Service
+  // 3. Check MinIO Storage
+  try {
+    const storageStart = Date.now();
+    const minioEndpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000';
+    const controller2 = new AbortController();
+    const timeoutId2 = setTimeout(() => controller2.abort(), 5000);
+
+    const minioRes = await fetch(`${minioEndpoint}/minio/health/live`, {
+      signal: controller2.signal,
+    });
+    clearTimeout(timeoutId2);
+
+    services.storage = {
+      status: minioRes.ok ? 'healthy' : 'unhealthy',
+      latencyMs: Date.now() - storageStart,
+    };
+  } catch (error) {
+    services.storage = {
+      status: 'unhealthy',
+      error: error instanceof Error ? error.message : 'MinIO unreachable',
+    };
+  }
+
+  // 4. Check LaTeX Service
   try {
     const latexStart = Date.now();
     const latexUrl = process.env.LATEX_SERVICE_URL || 'http://localhost:8080';

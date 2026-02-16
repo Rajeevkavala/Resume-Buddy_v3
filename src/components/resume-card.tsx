@@ -54,6 +54,13 @@ interface ResumeCardData {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  originalFile?: {
+    id: string;
+    objectKey: string;
+    originalName: string;
+    size: number;
+    createdAt: string;
+  } | null;
   generatedResumes: GeneratedResume[];
 }
 
@@ -76,6 +83,7 @@ export function ResumeCard({ resume, onDelete, onArchive, onRefresh }: ResumeCar
     : null;
   const hasExports = resume.generatedResumes.length > 0;
   const latestExport = resume.generatedResumes[0];
+  const hasOriginal = Boolean(resume.originalFile);
   const isArchived = !resume.isActive;
 
   const getScoreColor = (score: number) => {
@@ -216,6 +224,12 @@ export function ResumeCard({ resume, onDelete, onArchive, onRefresh }: ResumeCar
                   View / Analyze
                 </DropdownMenuItem>
                 {hasExports && (
+                  <DropdownMenuItem onClick={handleDownload}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </DropdownMenuItem>
+                )}
+                {!hasExports && hasOriginal && (
                   <DropdownMenuItem onClick={handleDownload}>
                     <Download className="mr-2 h-4 w-4" />
                     Download

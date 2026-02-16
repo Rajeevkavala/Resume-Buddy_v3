@@ -8,6 +8,13 @@ import {
   type TokenUser,
 } from '@/lib/auth';
 import { setAuthCookies } from '@/lib/auth-cookies';
+import { sendWelcomeEmail } from '@/lib/email-notifications';
+
+function isAdminEmail(email: string): boolean {
+  const normalized = email.toLowerCase().trim();
+  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map((e) => e.trim().toLowerCase()) || [];
+  return adminEmails.includes(normalized);
+}
 
 // ============ GET /api/auth/callback/google ============
 
@@ -57,6 +64,9 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    const shouldPromoteToAdmin = isAdminEmail(googleUser.email);
+    let isNewUser = false;
+
     if (user) {
       // Check if Google account is linked
       const hasGoogleAccount = user.accounts.some(
@@ -83,16 +93,18 @@ export async function GET(request: NextRequest) {
           emailVerified: true,
           avatar: user.avatar || googleUser.picture || undefined,
           name: user.name || googleUser.name,
+          ...(shouldPromoteToAdmin && user.role !== 'ADMIN' ? { role: 'ADMIN' } : {}),
         },
       });
     } else {
+      isNewUser = true;
       // Create new user with Google account + subscription
       user = await prisma.user.create({
         data: {
           email: googleUser.email.toLowerCase(),
           name: googleUser.name,
           avatar: googleUser.picture || undefined,
-          role: 'USER',
+          role: shouldPromoteToAdmin ? 'ADMIN' : 'USER',
           status: 'ACTIVE',
           emailVerified: googleUser.emailVerified,
           lastLoginAt: new Date(),
@@ -113,6 +125,17 @@ export async function GET(request: NextRequest) {
           subscription: true,
         },
       });
+    }
+
+    // Refresh user object if we promoted role
+    if (user && shouldPromoteToAdmin && user.role !== 'ADMIN') {
+      user = await prisma.user.findUnique({
+        where: { id: user.id },
+        include: { accounts: true, subscription: true },
+      });
+      if (!user) {
+        return NextResponse.redirect(`${appUrl}/login?error=user_not_found`);
+      }
     }
 
     // Check user status
@@ -158,8 +181,16 @@ export async function GET(request: NextRequest) {
     // 7. Set cookies
     await setAuthCookies(sessionId, tokenPair.refreshToken);
 
-    // 8. Redirect to dashboard
-    return NextResponse.redirect(`${appUrl}/dashboard`);
+    // 7b. Send welcome email for new users (non-blocking)
+    if (isNewUser) {
+      sendWelcomeEmail(user.email, user.name || 'there').catch(() => {});
+    }
+
+    // 8. Redirect to returnTo URL (from cookie) or default to dashboard
+    const returnTo = cookieStore.get('oauth_return_to')?.value;
+    cookieStore.set('oauth_return_to', '', { maxAge: 0, path: '/' });
+    const redirectPath = (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) ? returnTo : '/dashboard';
+    return NextResponse.redirect(`${appUrl}${redirectPath}`);
 
   } catch (error) {
     console.error('[Google Callback] Error:', error);

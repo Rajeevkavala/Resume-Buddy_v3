@@ -221,6 +221,8 @@ export function OTPLogin({ defaultChannel = 'email', returnUrl = '/dashboard', o
       }
 
       toast.success('Login successful!');
+      // Notify auth context of successful OTP login
+      window.dispatchEvent(new CustomEvent('auth-success', { detail: { user: data.user } }));
       setStep('success');
       setTimeout(() => { onSuccess?.(); router.replace(returnUrl); }, 500);
     } catch {
@@ -251,6 +253,8 @@ export function OTPLogin({ defaultChannel = 'email', returnUrl = '/dashboard', o
       }
 
       toast.success('Welcome to ResumeBuddy!');
+      // Notify auth context of successful OTP login (new user)
+      window.dispatchEvent(new CustomEvent('auth-success', {}));
       setStep('success');
       setTimeout(() => { onSuccess?.(); router.replace(returnUrl); }, 500);
     } catch {

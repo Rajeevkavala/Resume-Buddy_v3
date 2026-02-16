@@ -25,21 +25,19 @@ interface CachedUsage {
 }
 
 /**
- * Get current local date string for cache validation
+ * Get current UTC date string for cache validation (matches server-side UTC day boundary)
  */
 function getCurrentDateString(): string {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
-function getNextMidnightLocal(): Date {
-  const next = new Date();
-  next.setDate(next.getDate() + 1);
-  next.setHours(0, 0, 0, 0);
-  return next;
+function getNextMidnightUTC(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
 }
 
 /**
@@ -168,9 +166,7 @@ export function useDailyUsage() {
 
       // Fail-soft: if backend returns non-200 or success:false, keep UI stable.
       if (!response.ok || data?.success === false) {
-        const now = new Date();
-        const resetAt = new Date(now);
-        resetAt.setHours(24, 0, 0, 0);
+        const resetAt = getNextMidnightUTC();
 
         const fallbackState = {
           used: 0,
@@ -210,9 +206,7 @@ export function useDailyUsage() {
         if (process.env.NODE_ENV === 'development') {
           console.warn('Daily usage fetch failed; using fallback.', error);
         }
-        const now = new Date();
-        const resetAt = new Date(now);
-        resetAt.setHours(24, 0, 0, 0);
+        const resetAt = getNextMidnightUTC();
         setState({
           used: 0,
           remaining: 10,
@@ -301,7 +295,8 @@ export function useDailyUsage() {
     };
   }, [decrementUsage, fetchUsage, user?.uid]);
 
-  // Schedule a single refresh at local midnight (no polling).
+  // Schedule a refresh when the server-reported resetAt time arrives.
+  // Falls back to next UTC midnight if no resetAt is available.
   useEffect(() => {
     if (!user?.uid) return;
 
@@ -311,8 +306,15 @@ export function useDailyUsage() {
     }
 
     const schedule = () => {
-      const nextMidnight = getNextMidnightLocal();
-      const msUntil = Math.max(0, nextMidnight.getTime() - Date.now()) + 250;
+      // Use server resetAt if available, otherwise compute next UTC midnight
+      let resetTime: number;
+      if (state.resetAt) {
+        resetTime = state.resetAt.getTime();
+      } else {
+        const now = new Date();
+        resetTime = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+      }
+      const msUntil = Math.max(0, resetTime - Date.now()) + 500; // 500ms buffer
 
       midnightTimerRef.current = window.setTimeout(() => {
         clearCachedUsage(user.uid);
@@ -320,9 +322,10 @@ export function useDailyUsage() {
           ...prev,
           used: 0,
           remaining: prev.limit,
-          resetAt: nextMidnight,
+          resetAt: new Date(resetTime),
         }));
         fetchUsage(true);
+        // Re-schedule for next cycle
         schedule();
       }, msUntil);
     };
@@ -335,7 +338,7 @@ export function useDailyUsage() {
         midnightTimerRef.current = null;
       }
     };
-  }, [fetchUsage, user?.uid]);
+  }, [fetchUsage, user?.uid, state.resetAt]);
 
   return {
     ...state,

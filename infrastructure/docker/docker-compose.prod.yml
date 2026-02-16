@@ -1,6 +1,6 @@
 # docker-compose.prod.yml
-# Production overrides - use with:
-#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
+# Production overrides for 5000+ concurrent users
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
 
 version: '3.9'
 
@@ -9,11 +9,33 @@ services:
     restart: always
     environment:
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    command: >
+      postgres
+      -c max_connections=300
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=128MB
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=4
+      -c max_parallel_workers_per_gather=2
+      -c max_parallel_workers=4
+      -c log_min_duration_statement=500
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 3G
           cpus: "2.0"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     restart: always
@@ -21,12 +43,22 @@ services:
       redis-server
       --appendonly yes
       --requirepass ${REDIS_PASSWORD}
-      --maxmemory 512mb
+      --maxmemory 1024mb
       --maxmemory-policy allkeys-lru
+      --maxclients 10000
+      --tcp-backlog 511
+      --hz 100
+      --tcp-keepalive 300
+      --timeout 0
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     restart: always
@@ -39,17 +71,35 @@ services:
     restart: always
     environment:
       NODE_ENV: production
+      NODE_OPTIONS: "--max-old-space-size=1800"
+      DATABASE_POOL_SIZE: "25"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.web.rule=Host(`${APP_DOMAIN:-localhost}`)"
       - "traefik.http.routers.web.entrypoints=websecure"
       - "traefik.http.routers.web.tls.certresolver=letsencrypt"
       - "traefik.http.services.web.loadbalancer.server.port=9002"
+      # Rate limiting at proxy level
+      - "traefik.http.middlewares.ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.ratelimit.ratelimit.burst=200"
+      - "traefik.http.middlewares.ratelimit.ratelimit.period=1m"
+      - "traefik.http.routers.web.middlewares=ratelimit"
     deploy:
+      replicas: 3
       resources:
         limits:
           memory: 2G
           cpus: "2.0"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9002/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   websocket:
     restart: always
@@ -59,13 +109,20 @@ services:
       - "traefik.http.routers.ws.entrypoints=websecure"
       - "traefik.http.routers.ws.tls.certresolver=letsencrypt"
       - "traefik.http.services.ws.loadbalancer.server.port=3001"
+    deploy:
+      replicas: 2
 
   latex:
     restart: always
     deploy:
+      replicas: 2
       resources:
         limits:
           memory: 2G
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
 
   traefik:
     restart: always
@@ -82,3 +139,5 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--log.level=WARN"
+      - "--accesslog=true"
+      - "--accesslog.filters.statuscodes=400-599"

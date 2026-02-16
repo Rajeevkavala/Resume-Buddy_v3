@@ -11,11 +11,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { User } from 'firebase/auth';
 import { PasswordInput } from '@/components/ui/password-input';
 import { validatePassword, validatePasswordMatch, type PasswordValidationResult } from '@/lib/password-validation';
-import { withSecurePasswordHandling, clearSensitiveData, secureLog } from '@/lib/auth-security';
+import { clearSensitiveData, secureLog } from '@/lib/auth-security';
 
 const passwordFormSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
@@ -29,7 +27,7 @@ const passwordFormSchema = z.object({
 interface ChangePasswordDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  user: User;
+  user: { id?: string; uid?: string; email?: string | null };
 }
 
 export function ChangePasswordDialog({ isOpen, onClose, user }: ChangePasswordDialogProps) {
@@ -45,18 +43,6 @@ export function ChangePasswordDialog({ isOpen, onClose, user }: ChangePasswordDi
       newPassword: '',
       confirmPassword: '',
     },
-  });
-
-  const reauthenticateUser = withSecurePasswordHandling(async (currentPassword: string) => {
-    if (!user?.email) throw new Error('No user email found');
-    
-    secureLog('Starting reauthentication process', { email: user.email });
-    
-    // Firebase Auth handles secure credential creation and transmission
-    const credential = EmailAuthProvider.credential(user.email, currentPassword);
-    await reauthenticateWithCredential(user, credential);
-    
-    secureLog('Reauthentication successful');
   });
 
   const onSubmit = async (values: z.infer<typeof passwordFormSchema>) => {
@@ -75,25 +61,32 @@ export function ChangePasswordDialog({ isOpen, onClose, user }: ChangePasswordDi
 
     setIsChangingPassword(true);
 
-    const promise = withSecurePasswordHandling(async () => {
+    const promise = async () => {
       secureLog('Starting password change process');
       
-      // Step 1: Reauthenticate user before changing password (security requirement)
-      await reauthenticateUser(values.currentPassword);
-      
-      // Step 2: Update password - Firebase Auth handles:
-      // - HTTPS/TLS encryption during transmission
-      // - Secure server-side bcrypt hashing with salt
-      // - No plain text storage
-      await updatePassword(user, values.newPassword);
+      const res = await fetch('/api/auth/password/change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          currentPassword: values.currentPassword,
+          newPassword: values.newPassword,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const error = new Error(data.error || 'Failed to update password');
+        (error as any).status = res.status;
+        throw error;
+      }
       
       secureLog('Password update completed successfully');
-      
-      // Clear form data from memory for additional security
       clearSensitiveData(values);
       
-      return "Password updated successfully!";
-    });
+      return 'Password updated successfully!';
+    };
 
     toast.promise(promise(), {
       loading: 'Updating password...',
@@ -104,13 +97,11 @@ export function ChangePasswordDialog({ isOpen, onClose, user }: ChangePasswordDi
         onClose();
         return message;
       },
-      error: (error) => {
-        if (error.code === 'auth/wrong-password') {
+      error: (error: any) => {
+        if (error.status === 401) {
           return 'Incorrect current password';
-        } else if (error.code === 'auth/weak-password') {
-          return 'Password is too weak. Please choose a stronger password.';
-        } else if (error.code === 'auth/requires-recent-login') {
-          return 'Please log in again before changing your password for security.';
+        } else if (error.status === 400) {
+          return error.message || 'Invalid password. Please choose a stronger password.';
         }
         return 'Failed to update password. Please try again.';
       },
@@ -119,7 +110,6 @@ export function ChangePasswordDialog({ isOpen, onClose, user }: ChangePasswordDi
   };
 
   const handleClose = () => {
-    // Clear form data and reset validation states
     const formValues = form.getValues();
     clearSensitiveData(formValues);
     form.reset();
@@ -136,7 +126,7 @@ export function ChangePasswordDialog({ isOpen, onClose, user }: ChangePasswordDi
         clearSensitiveData(formValues);
         form.reset();
       }
-    }, 30000); // Clear after 30 seconds of inactivity
+    }, 30000);
 
     return () => clearTimeout(timeout);
   }, [form]);

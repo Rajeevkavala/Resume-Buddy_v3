@@ -1,2 +1,2 @@
 // Shared package - types, utils, constants
-export {};
+export { logger } from './logger';

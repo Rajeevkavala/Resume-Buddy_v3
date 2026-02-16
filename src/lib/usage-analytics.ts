@@ -25,9 +25,11 @@ interface AlertConfig {
   action: 'warn' | 'throttle' | 'block';
 }
 
-// Store recent usage events (keep last 10,000)
+// Store recent usage events using a circular buffer to prevent memory growth
+// Maximum ~5MB at peak (1000 events × ~5KB each)
+const MAX_EVENTS = 1000;
 const usageEvents: UsageEvent[] = [];
-const MAX_EVENTS = 10000;
+let usageEventIndex = 0;
 
 // Daily aggregates for efficiency
 const dailyAggregates = new LRUCache<string, {
@@ -58,12 +60,13 @@ export function trackUsage(event: Omit<UsageEvent, 'timestamp'>): void {
     timestamp: new Date(),
   };
 
-  usageEvents.push(fullEvent);
-
-  // Trim old events if over limit
-  if (usageEvents.length > MAX_EVENTS) {
-    usageEvents.splice(0, usageEvents.length - MAX_EVENTS);
+  // Circular buffer insertion — O(1), no array growth or splicing
+  if (usageEvents.length < MAX_EVENTS) {
+    usageEvents.push(fullEvent);
+  } else {
+    usageEvents[usageEventIndex % MAX_EVENTS] = fullEvent;
   }
+  usageEventIndex++;
 
   // Update daily aggregates
   const dateKey = fullEvent.timestamp.toISOString().split('T')[0];

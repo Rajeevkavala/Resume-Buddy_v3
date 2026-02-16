@@ -28,6 +28,8 @@ const USER_SESSIONS_PREFIX = 'user_sessions:';
 const DEFAULT_TTL = 604800; // 7 days in seconds
 
 // ============ Redis Client ============
+// Uses a singleton pattern. In production, prefer importing from a shared
+// module (e.g., @/lib/redis) to avoid duplicate connections.
 
 let redisClient: Redis | null = null;
 
@@ -38,20 +40,26 @@ function getRedisClient(): Redis {
       throw new Error('REDIS_URL environment variable is not set');
     }
     redisClient = new Redis(redisUrl, {
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: 5,
       retryStrategy(times: number) {
-        const delay = Math.min(times * 200, 2000);
+        const delay = Math.min(times * 200, 5000);
         return delay;
       },
       lazyConnect: true,
+      enableAutoPipelining: true,
+      enableOfflineQueue: true,
+      connectTimeout: 10000,
+      reconnectOnError: (err: Error) => {
+        return err.message.includes('READONLY');
+      },
     });
 
     redisClient.on('error', (err: Error) => {
-      console.error('[Redis] Connection error:', err.message);
+      console.error('[Redis:Auth] Connection error:', err.message);
     });
 
     redisClient.on('connect', () => {
-      console.log('[Redis] Connected successfully');
+      console.log('[Redis:Auth] Connected successfully');
     });
   }
   return redisClient;

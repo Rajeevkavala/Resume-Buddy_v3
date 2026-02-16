@@ -12,20 +12,17 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Save, Mail, Lock, RefreshCw, CheckCircle, Shield, Edit, X, User, Loader2, AlertCircle } from 'lucide-react';
+import { Save, Mail, Lock, RefreshCw, CheckCircle, Shield, Edit, X, User, Loader2, AlertCircle, KeyRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
-import { updateUserProfile } from '@/app/actions';
-import { updateProfile, sendEmailVerification } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { ProfilePhotoUploader } from '@/components/profile-photo-uploader';
 import { ChangeEmailDialog } from '@/components/change-email-dialog';
 import { ChangePasswordDialog } from '@/components/change-password-dialog';
@@ -50,6 +47,10 @@ export default function ProfilePage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isChangeEmailDialogOpen, setIsChangeEmailDialogOpen] = useState(false);
   const [isChangePasswordDialogOpen, setIsChangePasswordDialogOpen] = useState(false);
+  const [showVerificationInput, setShowVerificationInput] = useState(false);
+  const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const verificationRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const form = useForm<z.infer<typeof profileFormSchema>>({
     resolver: zodResolver(profileFormSchema),
@@ -84,8 +85,17 @@ export default function ProfilePage() {
     setIsSendingVerification(true);
 
     const promise = async () => {
-      await sendEmailVerification(user);
-      return "Verification email sent to your current email address!";
+      const res = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send verification email');
+      setShowVerificationInput(true);
+      setVerificationCode(['', '', '', '', '', '']);
+      // Focus the first input after render
+      setTimeout(() => verificationRefs.current[0]?.focus(), 100);
+      return 'Verification code sent to your email!';
     };
 
     toast.promise(promise(), {
@@ -93,43 +103,94 @@ export default function ProfilePage() {
       success: (message) => message,
       error: (error) => {
         console.error('Verification email error:', error);
-        if (error.code === 'auth/too-many-requests') {
-          return 'Too many requests. Please wait before requesting another verification email.';
-        }
-        return 'Failed to send verification email. Please try again.';
+        return error?.message || 'Failed to send verification email. Please try again.';
       },
       finally: () => setIsSendingVerification(false),
     });
+  };
+
+  const handleVerificationCodeChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newCode = [...verificationCode];
+    if (value.length > 1) {
+      // Handle paste
+      const chars = value.slice(0, 6).split('');
+      chars.forEach((char, i) => {
+        if (index + i < 6) newCode[index + i] = char;
+      });
+      setVerificationCode(newCode);
+      const nextIndex = Math.min(index + chars.length, 5);
+      verificationRefs.current[nextIndex]?.focus();
+      if (newCode.every(d => d !== '')) {
+        submitVerificationCode(newCode.join(''));
+      }
+      return;
+    }
+    newCode[index] = value;
+    setVerificationCode(newCode);
+    if (value && index < 5) {
+      verificationRefs.current[index + 1]?.focus();
+    }
+    if (value && newCode.every(d => d !== '')) {
+      submitVerificationCode(newCode.join(''));
+    }
+  };
+
+  const handleVerificationKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !verificationCode[index] && index > 0) {
+      verificationRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const submitVerificationCode = async (code?: string) => {
+    const otpCode = code || verificationCode.join('');
+    if (otpCode.length !== 6) {
+      toast.error('Please enter the complete 6-digit code');
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      const res = await fetch('/api/auth/verify-email', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ code: otpCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Invalid verification code');
+        setVerificationCode(['', '', '', '', '', '']);
+        verificationRefs.current[0]?.focus();
+        return;
+      }
+      toast.success('Email verified successfully!');
+      setShowVerificationInput(false);
+      await forceReloadUser?.();
+    } catch {
+      toast.error('Failed to verify email. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
   };
   
   const onSubmit = async (values: z.infer<typeof profileFormSchema>) => {
     if (!user) return;
     setIsSubmitting(true);
-    
-    const formData = new FormData();
-    formData.append('displayName', values.displayName);
-    if (currentPhotoUrl) {
-      formData.append('photoURL', currentPhotoUrl);
-    }
 
-    const promise = updateUserProfile(user.uid, formData).then(async (newProfileData) => {
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        const updateData: { displayName?: string; photoURL?: string } = {};
-        if (newProfileData.displayName) {
-          updateData.displayName = newProfileData.displayName;
-        }
-        // Use the current photo URL that was set by the photo uploader
-        if (currentPhotoUrl) {
-          updateData.photoURL = currentPhotoUrl;
-        }
-        
-        await updateProfile(currentUser, updateData);
-      }
+    const promise = fetch('/api/auth/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: values.displayName,
+      }),
+    }).then(async (res) => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update profile');
       
-      // Force a reload of the user object from Firebase to get the new data
+      // Force a reload of the user from session
       await forceReloadUser?.();
-      return "Profile updated successfully!";
+      return 'Profile updated successfully!';
     });
 
     toast.promise(promise, {
@@ -322,20 +383,60 @@ export default function ProfilePage() {
                     
                     {/* Verify Email Button - Only if not verified */}
                     {!user.emailVerified && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={sendCurrentEmailVerification}
-                        disabled={isSendingVerification}
-                        className="mt-3"
-                      >
-                        {isSendingVerification ? (
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        ) : (
-                          <Mail className="h-4 w-4 mr-2" />
+                      <div className="mt-3 space-y-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={sendCurrentEmailVerification}
+                          disabled={isSendingVerification || isVerifying}
+                        >
+                          {isSendingVerification ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          ) : (
+                            <Mail className="h-4 w-4 mr-2" />
+                          )}
+                          {showVerificationInput ? 'Resend Code' : 'Send Verification Email'}
+                        </Button>
+
+                        {/* OTP Input for Email Verification */}
+                        {showVerificationInput && (
+                          <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <KeyRound className="h-4 w-4" />
+                              <span>Enter the 6-digit code sent to your email</span>
+                            </div>
+                            <div className="flex gap-2 justify-center">
+                              {verificationCode.map((digit, index) => (
+                                <Input
+                                  key={index}
+                                  ref={(el) => { verificationRefs.current[index] = el; }}
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={6}
+                                  value={digit}
+                                  onChange={(e) => handleVerificationCodeChange(index, e.target.value)}
+                                  onKeyDown={(e) => handleVerificationKeyDown(index, e)}
+                                  disabled={isVerifying}
+                                  className="w-11 h-12 text-center text-lg font-semibold rounded-lg"
+                                />
+                              ))}
+                            </div>
+                            <Button
+                              size="sm"
+                              className="w-full"
+                              onClick={() => submitVerificationCode()}
+                              disabled={isVerifying || verificationCode.some(d => !d)}
+                            >
+                              {isVerifying ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                              )}
+                              {isVerifying ? 'Verifying...' : 'Verify Email'}
+                            </Button>
+                          </div>
                         )}
-                        Send Verification Email
-                      </Button>
+                      </div>
                     )}
                   </div>
                 </div>

@@ -11,6 +11,7 @@ import {
   type OTPChannel,
   type OTPPurpose,
 } from '@/lib/auth';
+import { enforceApiRateLimit } from '@/lib/api-rate-limiter';
 
 // ============ Request Schema ============
 
@@ -43,6 +44,10 @@ function validateDestination(destination: string, channel: OTPChannel): { valid:
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 OTP sends per 10 minutes per IP
+    const rateLimitResponse = await enforceApiRateLimit(request, 'auth-otp-send');
+    if (rateLimitResponse) return rateLimitResponse;
+
     // 1. Parse and validate input
     const body = await request.json();
     const validated = sendOTPSchema.safeParse(body);

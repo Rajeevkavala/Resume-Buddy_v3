@@ -40,6 +40,13 @@ interface ResumeListItem {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  originalFile?: {
+    id: string;
+    objectKey: string;
+    originalName: string;
+    size: number;
+    createdAt: string;
+  } | null;
   generatedResumes: Array<{
     id: string;
     templateId: string;

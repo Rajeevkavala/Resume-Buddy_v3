@@ -8,7 +8,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
-import { s3Client, getDefaultBucket } from './minio-client';
+import { s3Client, getDefaultBucket, ensureBucket } from './minio-client';
 
 /**
  * Resume storage service — CRUD operations for files in MinIO/S3.
@@ -52,6 +52,7 @@ export async function uploadFile(
   contentType: string,
   subfolder: StorageSubfolder = 'originals',
 ): Promise<UploadResult> {
+  await ensureBucket(BUCKET);
   const fileId = nanoid(12);
   const extension = filename.split('.').pop() || 'bin';
   const objectKey = `resumes/${userId}/${subfolder}/${fileId}.${extension}`;
@@ -171,6 +172,7 @@ export async function getPresignedDownloadUrl(
   objectKey: string,
   expiresInSeconds: number = 3600,
 ): Promise<string> {
+  await ensureBucket(BUCKET);
   return getSignedUrl(
     s3Client,
     new GetObjectCommand({
@@ -188,6 +190,7 @@ export async function getPresignedUploadUrl(
   contentType: string,
   expiresInSeconds: number = 900,
 ): Promise<{ uploadUrl: string; objectKey: string }> {
+  await ensureBucket(BUCKET);
   const fileId = nanoid(12);
   const extension = filename.split('.').pop() || 'bin';
   const objectKey = `resumes/${userId}/originals/${fileId}.${extension}`;

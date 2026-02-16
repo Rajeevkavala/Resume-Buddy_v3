@@ -2,8 +2,9 @@
 'use client';
 
 import { createContext, useState, ReactNode, Dispatch, SetStateAction, useEffect, startTransition, useCallback, useContext } from 'react';
-import { getUserData } from '@/lib/local-storage';
+import { getUserData, saveUserData } from '@/lib/local-storage';
 import { useAuth } from './auth-context';
+import { loadResumeDataAction } from '@/app/actions';
 import type { AnalysisResult, QATopic, JobRole } from '@/lib/types';
 import type { GenerateInterviewQuestionsOutput } from '@/ai/flows/generate-interview-questions';
 import type { GenerateResumeQAOutput } from '@/ai/flows/generate-resume-qa';
@@ -111,6 +112,39 @@ export function ResumeProvider({ children }: { children: ReactNode }) {
   }, []);
 
 
+  const applyData = useCallback((data: AnalysisResult) => {
+    setResumeText(data.resumeText || '');
+    setJobDescription(data.jobDescription || '');
+    setJobRole(data.jobRole || '');
+    setJobUrl(data.jobUrl || '');
+    setAnalysis(data.analysis || null);
+    setImprovements(data.improvements || null);
+    setInterview(data.interview || null);
+    setQa(data.qa || null);
+    setCoverLetter(data.coverLetter || null);
+    setStoredResumeText(data.resumeText);
+    setStoredJobDescription(data.jobDescription);
+    setStoredJobRole(data.jobRole);
+    setStoredJobUrl(data.jobUrl);
+  }, []);
+
+  const clearState = useCallback(() => {
+    setResumeText('');
+    setJobDescription('');
+    setJobRole('');
+    setJobUrl('');
+    setResumeFile(null);
+    setAnalysis(null);
+    setImprovements(null);
+    setInterview(null);
+    setQa(null);
+    setCoverLetter(null);
+    setStoredResumeText('');
+    setStoredJobDescription('');
+    setStoredJobRole('');
+    setStoredJobUrl('');
+  }, []);
+
   const loadDataFromCache = useCallback(() => {
     if (user) {
       // Always try to load data when user changes or on explicit reload
@@ -119,37 +153,24 @@ export function ResumeProvider({ children }: { children: ReactNode }) {
           const data = getUserData(user.uid);
           
           if (data) {
-            setResumeText(data.resumeText || '');
-            setJobDescription(data.jobDescription || '');
-            setJobRole(data.jobRole || '');
-            setJobUrl(data.jobUrl || '');
-            setAnalysis(data.analysis || null);
-            setImprovements(data.improvements || null);
-            setInterview(data.interview || null);
-            setQa(data.qa || null);
-            setCoverLetter(data.coverLetter || null);
-            setStoredResumeText(data.resumeText);
-            setStoredJobDescription(data.jobDescription);
-            setStoredJobRole(data.jobRole);
-            setStoredJobUrl(data.jobUrl);
+            applyData(data);
+            setLastLoadedUserId(user.uid);
           } else {
-            // Clear state for users with no data
-            setResumeText('');
-            setJobDescription('');
-            setJobRole('');
-            setJobUrl('');
-            setResumeFile(null);
-            setAnalysis(null);
-            setImprovements(null);
-            setInterview(null);
-            setQa(null);
-            setCoverLetter(null);
-            setStoredResumeText('');
-            setStoredJobDescription('');
-            setStoredJobRole('');
-            setStoredJobUrl('');
+            // localStorage is empty — try loading from database
+            clearState();
+            setLastLoadedUserId(user.uid);
+            
+            // Async: fetch from DB and populate both state and localStorage
+            loadResumeDataAction(user.uid).then((dbData) => {
+              if (dbData) {
+                applyData(dbData);
+                // Cache in localStorage for future loads
+                saveUserData(user.uid, dbData);
+              }
+            }).catch((err) => {
+              console.error('Error loading resume data from DB:', err);
+            });
           }
-          setLastLoadedUserId(user.uid);
         });
         
         // Always set data loaded to true after attempting to load
@@ -162,7 +183,7 @@ export function ResumeProvider({ children }: { children: ReactNode }) {
       });
       setIsDataLoaded(true);
     }
-  }, [user, lastLoadedUserId, resetState]);
+  }, [user, lastLoadedUserId, resetState, applyData, clearState]);
 
   // Force reload function that clears the lastLoadedUserId to trigger a fresh data load
   const forceReloadData = useCallback(() => {

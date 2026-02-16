@@ -39,6 +39,11 @@ export async function GET(request: NextRequest) {
     prisma.resumeData.findMany({
       where,
       include: {
+        storedFiles: {
+          where: { objectKey: { contains: '/originals/' } },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
         generatedResumes: {
           include: { file: true },
           orderBy: { createdAt: 'desc' },
@@ -52,8 +57,19 @@ export async function GET(request: NextRequest) {
     prisma.resumeData.count({ where }),
   ]);
 
+  const resumesWithOriginal = resumes.map((r) => {
+    const originalFile = r.storedFiles?.[0] ?? null;
+    // Keep response shape stable for existing UI consumers
+    // while making the latest original upload visible.
+    const { storedFiles: _storedFiles, ...rest } = r;
+    return {
+      ...rest,
+      originalFile,
+    };
+  });
+
   return NextResponse.json({
-    resumes,
+    resumes: resumesWithOriginal,
     total,
     page,
     limit,

@@ -107,6 +107,7 @@ export async function DELETE(
   const existing = await prisma.resumeData.findFirst({
     where: { id, userId: auth.userId },
     include: {
+      storedFiles: true,
       generatedResumes: { include: { file: true } },
     },
   });
@@ -117,6 +118,16 @@ export async function DELETE(
 
   if (hard) {
     // Hard delete: remove files from MinIO + DB records
+    for (const sf of existing.storedFiles) {
+      if (sf.objectKey) {
+        try {
+          await deleteStorageFile(sf.objectKey);
+        } catch {
+          // File may already be deleted
+        }
+      }
+    }
+
     for (const gr of existing.generatedResumes) {
       if (gr.file?.objectKey) {
         try {
@@ -129,13 +140,22 @@ export async function DELETE(
 
     // Delete in order: GeneratedResume → StoredFile → ResumeData
     await prisma.generatedResume.deleteMany({ where: { resumeDataId: id } });
-    // Delete StoredFile records for files linked to this resume's generated resumes
-    const fileIds = existing.generatedResumes
+    // Delete StoredFile records linked to this resume (originals) and any stored files
+    // referenced by generated resumes.
+    const generatedFileIds = existing.generatedResumes
       .map((gr) => gr.fileId)
       .filter(Boolean) as string[];
-    if (fileIds.length > 0) {
-      await prisma.storedFile.deleteMany({ where: { id: { in: fileIds } } });
-    }
+
+    await prisma.storedFile.deleteMany({
+      where: {
+        OR: [
+          { resumeDataId: id },
+          ...(generatedFileIds.length > 0
+            ? [{ id: { in: generatedFileIds } }]
+            : []),
+        ],
+      },
+    });
     await prisma.resumeData.delete({ where: { id } });
 
     return NextResponse.json({ deleted: true, mode: 'hard' });

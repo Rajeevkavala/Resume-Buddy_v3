@@ -4,7 +4,7 @@
  * Fast Auth Checker
  * 
  * This utility provides faster authentication state detection
- * by checking cookies and localStorage before Firebase initializes
+ * by checking the session cookie before the full session API call completes.
  */
 
 export const fastAuthCheck = (): { isLikelyAuthenticated: boolean; userId?: string } => {
@@ -13,41 +13,14 @@ export const fastAuthCheck = (): { isLikelyAuthenticated: boolean; userId?: stri
   }
 
   try {
-    // Check authentication cookie first (fastest)
-    // Check for both cookie names for migration compatibility
-    const authCookie = document.cookie
+    // Check for rb_session cookie (set by the auth API on login/register)
+    const sessionCookie = document.cookie
       .split('; ')
-      .find(row => row.startsWith('fast-auth-uid=') || row.startsWith('firebase-auth-token='));
+      .find(row => row.startsWith('rb_session='));
     
-    if (authCookie) {
-      const userId = authCookie.split('=')[1];
-      if (userId && userId !== '') {
-        return { isLikelyAuthenticated: true, userId };
-      }
-    }
-
-    // Fallback: Check localStorage for Firebase auth data
-    const firebaseKeys = Object.keys(localStorage).filter(key => 
-      key.startsWith('firebase:authUser:') || key.includes('firebase')
-    );
-    
-    if (firebaseKeys.length > 0) {
-      // Try to extract user ID from Firebase localStorage
-      const authKey = firebaseKeys.find(key => key.startsWith('firebase:authUser:'));
-      if (authKey) {
-        try {
-          const authData = localStorage.getItem(authKey);
-          if (authData && authData !== 'null') {
-            const userData = JSON.parse(authData);
-            if (userData?.uid) {
-              return { isLikelyAuthenticated: true, userId: userData.uid };
-            }
-          }
-        } catch (error) {
-          console.warn('Error parsing auth data:', error);
-        }
-      }
-      
+    if (sessionCookie) {
+      // The cookie exists — user is likely authenticated.
+      // We don't parse the JWT here; the server validates on /api/auth/session.
       return { isLikelyAuthenticated: true };
     }
 
@@ -59,37 +32,36 @@ export const fastAuthCheck = (): { isLikelyAuthenticated: boolean; userId?: stri
 };
 
 /**
- * Sets up fast auth cookie for middleware
- * Uses 'fast-auth-uid' to match middleware cookie check
+ * Sets up fast auth cookie for middleware.
+ * Note: In the new auth system the rb_session cookie is set server-side
+ * by the login/register API routes. This function is kept for backward
+ * compatibility but is largely a no-op — use clearFastAuthCookie for logout.
  */
-export const setFastAuthCookie = (userId: string) => {
-  if (typeof window === 'undefined') return;
-  
-  const isSecure = typeof location !== 'undefined' && location.protocol === 'https:';
-  // Use SameSite=Lax for better redirect compatibility in production
-  document.cookie = `fast-auth-uid=${userId}; path=/; max-age=86400; samesite=lax${isSecure ? '; secure' : ''}`;
+export const setFastAuthCookie = (_userId: string) => {
+  // rb_session is an httpOnly cookie set by the server.
+  // Client-side code cannot set it, so this is intentionally a no-op.
 };
 
 /**
- * Clears fast auth cookie
+ * Clears fast auth cookie on logout.
+ * The actual rb_session cookie is httpOnly and cleared server-side
+ * via POST /api/auth/logout — this clears any legacy cookies.
  */
 export const clearFastAuthCookie = () => {
   if (typeof window === 'undefined') return;
   
-  // Clear both old and new cookie names for migration
+  // Clear legacy cookies from old auth system
   document.cookie = 'fast-auth-uid=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
   document.cookie = 'firebase-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 };
 
 /**
  * Sets access-denied cookie to block navigation to protected routes
- * This is used when a user is authenticated but not whitelisted/blocked
  */
 export const setAccessDeniedCookie = () => {
   if (typeof window === 'undefined') return;
   
   const isSecure = typeof location !== 'undefined' && location.protocol === 'https:';
-  // Cookie expires in 24 hours - will be cleared on logout or when access is granted
   document.cookie = `access-denied=true; path=/; max-age=86400; samesite=lax${isSecure ? '; secure' : ''}`;
 };
 

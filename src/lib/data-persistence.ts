@@ -71,14 +71,16 @@ export async function saveData(
       createBase.jobUrl = data.jobUrl;
     }
     if (data.analysis !== undefined) {
-      updateData.analysis = data.analysis ?? undefined;
-      createBase.analysis = data.analysis ?? undefined;
-      updateData.lastAnalyzedAt = new Date();
-      createBase.lastAnalyzedAt = new Date();
+      updateData.analysis = data.analysis === null ? null : data.analysis;
+      createBase.analysis = data.analysis === null ? null : data.analysis;
+      if (data.analysis !== null) {
+        updateData.lastAnalyzedAt = new Date();
+        createBase.lastAnalyzedAt = new Date();
+      }
     }
     if (data.improvements !== undefined) {
-      updateData.improvements = data.improvements ?? undefined;
-      createBase.improvements = data.improvements ?? undefined;
+      updateData.improvements = data.improvements === null ? null : data.improvements;
+      createBase.improvements = data.improvements === null ? null : data.improvements;
     }
     if (data.interview !== undefined) {
       // Store interview data in parsedData JSON column
@@ -110,17 +112,23 @@ export async function saveData(
     }
 
     if (Object.keys(qaUpdates).length > 0 || data.qa !== undefined) {
-      const existing = await prisma.resumeData.findFirst({
-        where: { userId, isActive: true },
-        select: { qaHistory: true },
-      });
-      const existingQa = (existing?.qaHistory as Record<string, unknown>) || {};
-      const mergedQa = { ...existingQa, ...qaUpdates };
-      if (data.qa !== undefined && data.qa !== null) {
-        Object.assign(mergedQa, data.qa);
+      if (data.qa === null && Object.keys(qaUpdates).length === 0) {
+        // Explicitly clear all QA data
+        updateData.qaHistory = null;
+        createBase.qaHistory = null;
+      } else {
+        const existing = await prisma.resumeData.findFirst({
+          where: { userId, isActive: true },
+          select: { qaHistory: true },
+        });
+        const existingQa = (existing?.qaHistory as Record<string, unknown>) || {};
+        const mergedQa = { ...existingQa, ...qaUpdates };
+        if (data.qa !== undefined && data.qa !== null) {
+          Object.assign(mergedQa, data.qa);
+        }
+        updateData.qaHistory = mergedQa;
+        createBase.qaHistory = mergedQa;
       }
-      updateData.qaHistory = mergedQa;
-      createBase.qaHistory = mergedQa;
     }
 
     // Find existing active record or create a new one

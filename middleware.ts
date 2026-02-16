@@ -41,12 +41,12 @@ export function middleware(request: NextRequest) {
   // Content Security Policy to prevent unauthorized data access
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://www.googleapis.com https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
     "font-src 'self' https://fonts.gstatic.com data:",
-    "img-src 'self' data: https: blob: https://*.supabase.co https://hlduevifufaasxmrtjks.supabase.co",
-    "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://*.firebase.com wss://*.firebase.com https://accounts.google.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://*.supabase.co https://hlduevifufaasxmrtjks.supabase.co wss://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com",
-    "frame-src https://accounts.google.com https://*.firebaseapp.com https://*.firebase.com https://checkout.razorpay.com https://api.razorpay.com",
+    "img-src 'self' data: https: blob:",
+    "connect-src 'self' https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com",
+    "frame-src https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
     "object-src 'none'",
     "base-uri 'self'",
     "worker-src 'self' blob:"
@@ -54,11 +54,9 @@ export function middleware(request: NextRequest) {
   
   response.headers.set('Content-Security-Policy', csp);
 
-  // Check for authentication cookie
-  // New auth system uses rb_session, legacy system used fast-auth-uid
-  const newAuthCookie = request.cookies.get('rb_session');
-  const legacyAuthCookie = request.cookies.get('fast-auth-uid');
-  const isAuthenticated = !!(newAuthCookie?.value || legacyAuthCookie?.value);
+  // Check for authentication cookie (new JWT auth system)
+  const authCookie = request.cookies.get('rb_session');
+  const isAuthenticated = !!authCookie?.value;
 
   // Allow public routes
   const isPublicRoute = PUBLIC_ROUTES.some(route => 
@@ -66,10 +64,14 @@ export function middleware(request: NextRequest) {
   );
   
   if (isPublicRoute) {
-    // Don't redirect authenticated users from login/signup during sign-in flow
-    // The page will handle the redirect after successful authentication
-    // Only redirect if user directly visits login/signup when already authenticated
-    // and there's no returnTo parameter (which indicates sign-in in progress)
+    // Redirect authenticated users away from login/signup pages
+    if (isAuthenticated && (pathname === '/login' || pathname === '/signup')) {
+      const returnTo = request.nextUrl.searchParams.get('returnTo');
+      const target = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') 
+        ? returnTo 
+        : '/dashboard';
+      return NextResponse.redirect(new URL(target, request.url));
+    }
     return response;
   }
 

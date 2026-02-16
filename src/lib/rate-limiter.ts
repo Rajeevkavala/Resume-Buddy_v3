@@ -94,10 +94,11 @@ const rateLimitConfigs: Record<string, RateLimitConfig> = {
 // ============ Date Utilities ============
 
 function getCurrentDateString(): string {
+  // Use UTC to match PostgreSQL's date column and getStartOfToday()
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -105,14 +106,13 @@ function getStartOfToday(): Date {
   // Use UTC midnight to match PostgreSQL's date column behavior
   // Prisma serializes Date to ISO string (UTC), so we must use UTC midnight
   const now = new Date();
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 function getNextMidnight(): Date {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  return tomorrow;
+  // Use UTC midnight consistent with getStartOfToday() and database queries
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
 }
 
 // ============ Redis Sliding Window Rate Limiting ============

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getSessionCookie } from '@/lib/auth-cookies';
+import { resolveAvatarUrl } from '@/lib/avatar-url';
 
 // ============ Request Schema ============
 
@@ -130,7 +131,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ user });
+    return NextResponse.json({
+      user: {
+        ...user,
+        avatar: await resolveAvatarUrl(user.avatar),
+      },
+    });
 
   } catch (error) {
     console.error('[Profile] Get error:', error);

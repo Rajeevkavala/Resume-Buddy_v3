@@ -41,6 +41,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Resolve/create ResumeData first so we can link the StoredFile
+    let resumeData = null;
+    if (resumeDataId) {
+      resumeData = await prisma.resumeData.findFirst({
+        where: { id: resumeDataId, userId: auth.userId },
+      });
+      if (!resumeData) {
+        return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+      }
+    } else {
+      resumeData = await prisma.resumeData.create({
+        data: {
+          userId: auth.userId,
+          title: title || file.name.replace(/\.[^/.]+$/, ''),
+          isActive: true,
+        },
+      });
+    }
+
     // Upload to MinIO
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploadResult = await uploadFile(
@@ -55,6 +74,7 @@ export async function POST(request: NextRequest) {
     const storedFile = await prisma.storedFile.create({
       data: {
         userId: auth.userId,
+        resumeDataId: resumeData.id,
         filename: uploadResult.objectKey.split('/').pop()!,
         originalName: file.name,
         mimeType: file.type,
@@ -63,24 +83,6 @@ export async function POST(request: NextRequest) {
         objectKey: uploadResult.objectKey,
       },
     });
-
-    // Optionally create ResumeData if no resumeDataId provided
-    let resumeData = null;
-    if (resumeDataId) {
-      // Link to existing resume
-      resumeData = await prisma.resumeData.findFirst({
-        where: { id: resumeDataId, userId: auth.userId },
-      });
-    } else {
-      // Create new ResumeData entry
-      resumeData = await prisma.resumeData.create({
-        data: {
-          userId: auth.userId,
-          title: title || file.name.replace(/\.[^/.]+$/, ''),
-          isActive: true,
-        },
-      });
-    }
 
     return NextResponse.json({
       fileId: storedFile.id,

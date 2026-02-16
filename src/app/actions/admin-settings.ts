@@ -1,142 +1,122 @@
 'use server';
 
 /**
- * Admin Settings Actions
- * 
- * Manages configurable settings stored in Firestore:
- * - Subscription pricing (INR)
- * - Pro duration (days)
- * - Other app settings
+ * Admin Settings Actions — Prisma/PostgreSQL based
+ *
+ * Settings are stored in Postgres (singleton row) so changes made in the Admin UI
+ * persist across reloads and across Next.js server workers.
  */
 
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { verifyAdmin } from './admin';
+import { prisma } from '@/lib/db';
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface SubscriptionSettings {
-  priceINR: number;           // Price in INR (not paise) - e.g., 99 for ₹99
-  pricePaise: number;         // Price in paise for Razorpay - e.g., 9900 for ₹99
-  durationDays: number;       // Duration of Pro access in days
-  isTestMode: boolean;        // Whether to use test pricing
-  testPriceINR: number;       // Test price in INR
-  testPricePaise: number;     // Test price in paise
-  currency: string;           // Currency code (INR)
+  priceINR: number;
+  pricePaise: number;
+  durationDays: number;
+  isTestMode: boolean;
+  testPriceINR: number;
+  testPricePaise: number;
+  currency: string;
   updatedAt?: string;
   updatedBy?: string;
 }
 
 export interface AppSettings {
   subscription: SubscriptionSettings;
-  // Add more setting categories here as needed
 }
 
-// Default settings
-const DEFAULT_SUBSCRIPTION_SETTINGS: SubscriptionSettings = {
-  priceINR: 99,
-  pricePaise: 9900,
-  durationDays: 30,
-  isTestMode: true,
-  testPriceINR: 5,
-  testPricePaise: 500,
-  currency: 'INR',
-};
+function getDefaultSettingsFromEnv(): Omit<SubscriptionSettings, 'updatedAt' | 'updatedBy'> {
+  const priceINR = parseInt(process.env.SUBSCRIPTION_PRICE_INR || '99');
+  const testPriceINR = parseInt(process.env.SUBSCRIPTION_TEST_PRICE_INR || '5');
+  const durationDays = parseInt(process.env.SUBSCRIPTION_DURATION_DAYS || '30');
+  const isTestMode = process.env.SUBSCRIPTION_TEST_MODE === 'true';
 
-const SETTINGS_DOC_ID = 'app_settings';
-const SETTINGS_COLLECTION = 'config';
+  return {
+    priceINR,
+    pricePaise: priceINR * 100,
+    durationDays,
+    isTestMode,
+    testPriceINR,
+    testPricePaise: testPriceINR * 100,
+    currency: 'INR',
+  };
+}
+
+async function getOrCreateSubscriptionConfig() {
+  const defaults = getDefaultSettingsFromEnv();
+  return await prisma.subscriptionConfig.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      priceINR: defaults.priceINR,
+      pricePaise: defaults.pricePaise,
+      testPriceINR: defaults.testPriceINR,
+      testPricePaise: defaults.testPricePaise,
+      durationDays: defaults.durationDays,
+      isTestMode: defaults.isTestMode,
+      currency: defaults.currency,
+      updatedBy: 'system',
+    },
+  });
+}
+
+function toSubscriptionSettingsRow(row: Awaited<ReturnType<typeof getOrCreateSubscriptionConfig>>): SubscriptionSettings {
+  return {
+    priceINR: row.priceINR,
+    pricePaise: row.pricePaise,
+    durationDays: row.durationDays,
+    isTestMode: row.isTestMode,
+    testPriceINR: row.testPriceINR,
+    testPricePaise: row.testPricePaise,
+    currency: row.currency,
+    updatedAt: row.updatedAt.toISOString(),
+    updatedBy: row.updatedBy ?? undefined,
+  };
+}
 
 // ============================================================================
 // Get Settings
 // ============================================================================
 
-/**
- * Get current subscription settings
- */
 export async function getSubscriptionSettingsAction(): Promise<{
   success: boolean;
   data?: SubscriptionSettings;
   message?: string;
 }> {
   try {
-    const settingsRef = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
-    const settingsDoc = await getDoc(settingsRef);
-    
-    if (settingsDoc.exists()) {
-      const data = settingsDoc.data();
-      return {
-        success: true,
-        data: {
-          priceINR: data.subscription?.priceINR ?? DEFAULT_SUBSCRIPTION_SETTINGS.priceINR,
-          pricePaise: data.subscription?.pricePaise ?? DEFAULT_SUBSCRIPTION_SETTINGS.pricePaise,
-          durationDays: data.subscription?.durationDays ?? DEFAULT_SUBSCRIPTION_SETTINGS.durationDays,
-          isTestMode: data.subscription?.isTestMode ?? DEFAULT_SUBSCRIPTION_SETTINGS.isTestMode,
-          testPriceINR: data.subscription?.testPriceINR ?? DEFAULT_SUBSCRIPTION_SETTINGS.testPriceINR,
-          testPricePaise: data.subscription?.testPricePaise ?? DEFAULT_SUBSCRIPTION_SETTINGS.testPricePaise,
-          currency: data.subscription?.currency ?? DEFAULT_SUBSCRIPTION_SETTINGS.currency,
-          updatedAt: data.subscription?.updatedAt,
-          updatedBy: data.subscription?.updatedBy,
-        },
-      };
-    }
-    
-    // Return defaults if no settings exist
-    return {
-      success: true,
-      data: DEFAULT_SUBSCRIPTION_SETTINGS,
-    };
+    const row = await getOrCreateSubscriptionConfig();
+    return { success: true, data: toSubscriptionSettingsRow(row) };
   } catch (error) {
-    console.error('Error fetching subscription settings:', error);
-    return {
-      success: false,
-      message: 'Failed to fetch subscription settings',
-    };
+    console.error('Error loading subscription settings:', error);
+    return { success: false, message: 'Failed to load settings' };
   }
 }
 
-/**
- * Get the active price based on test mode setting
- */
 export async function getActivePriceAction(): Promise<{
   success: boolean;
-  data?: {
-    priceINR: number;
-    pricePaise: number;
-    durationDays: number;
-    isTestMode: boolean;
-  };
+  data?: { priceINR: number; pricePaise: number; durationDays: number; isTestMode: boolean };
   message?: string;
 }> {
   try {
-    const result = await getSubscriptionSettingsAction();
-    
-    if (!result.success || !result.data) {
-      return {
-        success: false,
-        message: result.message || 'Failed to get settings',
-      };
-    }
-    
-    const settings = result.data;
-    const isTest = settings.isTestMode;
-    
+    const s = await getOrCreateSubscriptionConfig();
     return {
       success: true,
       data: {
-        priceINR: isTest ? settings.testPriceINR : settings.priceINR,
-        pricePaise: isTest ? settings.testPricePaise : settings.pricePaise,
-        durationDays: settings.durationDays,
-        isTestMode: isTest,
+        priceINR: s.isTestMode ? s.testPriceINR : s.priceINR,
+        pricePaise: s.isTestMode ? s.testPricePaise : s.pricePaise,
+        durationDays: s.durationDays,
+        isTestMode: s.isTestMode,
       },
     };
   } catch (error) {
-    console.error('Error getting active price:', error);
-    return {
-      success: false,
-      message: 'Failed to get active price',
-    };
+    console.error('Error loading active price:', error);
+    return { success: false, message: 'Failed to load active price' };
   }
 }
 
@@ -144,94 +124,69 @@ export async function getActivePriceAction(): Promise<{
 // Update Settings (Admin Only)
 // ============================================================================
 
-/**
- * Update subscription settings (admin only)
- */
 export async function updateSubscriptionSettingsAction(
   adminEmail: string,
   settings: Partial<SubscriptionSettings>
-): Promise<{
-  success: boolean;
-  message: string;
-}> {
+): Promise<{ success: boolean; message: string }> {
   try {
-    // Verify admin
     const isAdmin = await verifyAdmin(adminEmail);
     if (!isAdmin) {
       return { success: false, message: 'Unauthorized: Admin access required' };
     }
-    
-    // Get current settings
-    const currentResult = await getSubscriptionSettingsAction();
-    const currentSettings = currentResult.data || DEFAULT_SUBSCRIPTION_SETTINGS;
-    
-    // Build updated settings
-    const updatedSubscription: SubscriptionSettings = {
-      priceINR: settings.priceINR ?? currentSettings.priceINR,
-      pricePaise: settings.pricePaise ?? (settings.priceINR ? settings.priceINR * 100 : currentSettings.pricePaise),
-      durationDays: settings.durationDays ?? currentSettings.durationDays,
-      isTestMode: settings.isTestMode ?? currentSettings.isTestMode,
-      testPriceINR: settings.testPriceINR ?? currentSettings.testPriceINR,
-      testPricePaise: settings.testPricePaise ?? (settings.testPriceINR ? settings.testPriceINR * 100 : currentSettings.testPricePaise),
-      currency: settings.currency ?? currentSettings.currency,
+
+    const current = await getOrCreateSubscriptionConfig();
+
+    const updated: SubscriptionSettings = {
+      priceINR: settings.priceINR ?? current.priceINR,
+      pricePaise: settings.pricePaise ?? (settings.priceINR ? settings.priceINR * 100 : current.pricePaise),
+      durationDays: settings.durationDays ?? current.durationDays,
+      isTestMode: settings.isTestMode ?? current.isTestMode,
+      testPriceINR: settings.testPriceINR ?? current.testPriceINR,
+      testPricePaise: settings.testPricePaise ?? (settings.testPriceINR ? settings.testPriceINR * 100 : current.testPricePaise),
+      currency: settings.currency ?? current.currency,
       updatedAt: new Date().toISOString(),
       updatedBy: adminEmail,
     };
-    
-    // Validate settings
-    if (updatedSubscription.priceINR < 1) {
-      return { success: false, message: 'Production price must be at least ₹1' };
-    }
-    if (updatedSubscription.durationDays < 1 || updatedSubscription.durationDays > 365) {
-      return { success: false, message: 'Duration must be between 1 and 365 days' };
-    }
-    if (updatedSubscription.testPriceINR < 1) {
-      return { success: false, message: 'Test price must be at least ₹1' };
-    }
-    
-    // Save to Firestore
-    const settingsRef = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC_ID);
-    await setDoc(settingsRef, {
-      subscription: updatedSubscription,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    
+
+    if (updated.priceINR < 1) return { success: false, message: 'Production price must be at least ₹1' };
+    if (updated.durationDays < 1 || updated.durationDays > 365) return { success: false, message: 'Duration must be between 1 and 365 days' };
+    if (updated.testPriceINR < 1) return { success: false, message: 'Test price must be at least ₹1' };
+
+    await prisma.subscriptionConfig.update({
+      where: { id: 1 },
+      data: {
+        priceINR: updated.priceINR,
+        pricePaise: updated.pricePaise,
+        testPriceINR: updated.testPriceINR,
+        testPricePaise: updated.testPricePaise,
+        durationDays: updated.durationDays,
+        isTestMode: updated.isTestMode,
+        currency: updated.currency,
+        updatedBy: adminEmail,
+      },
+    });
+
     return {
       success: true,
-      message: `Settings updated successfully. ${updatedSubscription.isTestMode ? 'Test mode is ON' : 'Production mode is ON'}`,
+      message: `Settings updated. ${updated.isTestMode ? 'Test mode ON' : 'Production mode ON'}`,
     };
   } catch (error) {
-    console.error('Error updating subscription settings:', error);
-    return {
-      success: false,
-      message: 'Failed to update subscription settings',
-    };
+    console.error('Error updating settings:', error);
+    return { success: false, message: 'Failed to update settings' };
   }
 }
 
-/**
- * Toggle test mode on/off
- */
 export async function toggleTestModeAction(
   adminEmail: string
-): Promise<{
-  success: boolean;
-  message: string;
-  isTestMode?: boolean;
-}> {
+): Promise<{ success: boolean; message: string; isTestMode?: boolean }> {
   try {
     const isAdmin = await verifyAdmin(adminEmail);
-    if (!isAdmin) {
-      return { success: false, message: 'Unauthorized: Admin access required' };
-    }
-    
-    const currentResult = await getSubscriptionSettingsAction();
-    const currentSettings = currentResult.data || DEFAULT_SUBSCRIPTION_SETTINGS;
-    
-    const newTestMode = !currentSettings.isTestMode;
-    
+    if (!isAdmin) return { success: false, message: 'Unauthorized: Admin access required' };
+
+    const current = await getOrCreateSubscriptionConfig();
+    const newTestMode = !current.isTestMode;
     await updateSubscriptionSettingsAction(adminEmail, { isTestMode: newTestMode });
-    
+
     return {
       success: true,
       message: newTestMode ? 'Test mode enabled (₹5 pricing)' : 'Production mode enabled (full pricing)',
@@ -239,9 +194,6 @@ export async function toggleTestModeAction(
     };
   } catch (error) {
     console.error('Error toggling test mode:', error);
-    return {
-      success: false,
-      message: 'Failed to toggle test mode',
-    };
+    return { success: false, message: 'Failed to toggle test mode' };
   }
 }

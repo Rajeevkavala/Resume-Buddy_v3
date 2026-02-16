@@ -74,6 +74,11 @@ function getProviderUsage(provider: string): ProviderUsage {
   const oneMinuteAgo = Date.now() - 60000;
   usage.minuteRequests = usage.minuteRequests.filter(t => t > oneMinuteAgo);
 
+  // Safety: cap minuteRequests array to prevent unbounded growth under burst traffic
+  if (usage.minuteRequests.length > 1000) {
+    usage.minuteRequests = usage.minuteRequests.slice(-500);
+  }
+
   return usage;
 }
 

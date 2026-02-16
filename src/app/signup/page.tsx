@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,10 +10,8 @@ import { toast } from 'sonner';
 import { Mail, Lock, Eye, EyeOff, User, Sparkles, ArrowRight, AlertCircle, Loader2, Check, X, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
-import { createUserProfile } from '@/lib/firestore';
-import { withSecurePasswordHandling, secureLog } from '@/lib/auth-security';
+import { secureLog } from '@/lib/auth-security';
 import { usePageTitle } from '@/hooks/use-page-title';
-import { checkEmailAccess } from '@/lib/access-control';
 import { useSearchParams } from 'next/navigation';
 import {
   Popover,
@@ -58,7 +54,7 @@ export default function SignupPage() {
   const nameRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, signInWithGoogle } = useAuth();
 
   // Get the return URL from query params
   const getReturnUrl = (): string => {
@@ -68,6 +64,13 @@ export default function SignupPage() {
     }
     return '/dashboard';
   };
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace(getReturnUrl());
+    }
+  }, [user, authLoading, router]);
 
   // Set page title
   usePageTitle('Sign Up');
@@ -112,7 +115,7 @@ export default function SignupPage() {
     return '';
   };
 
-  const handleSignup = withSecurePasswordHandling(async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const nameValidationError = validateName(name);
@@ -138,45 +141,54 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      const accessCheck = await checkEmailAccess(email);
+      secureLog('Starting secure account creation', { email, name });
       
-      if (!accessCheck.allowed) {
-        toast.error('Your email is not authorized to create an account. Please contact the administrator.');
-        setEmailError('Not authorized - contact admin');
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password, name: name.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorMessage = data.error || 'Failed to create account.';
+
+        if (res.status === 409) {
+          setEmailError('An account with this email already exists');
+        } else if (res.status === 400) {
+          if (errorMessage.toLowerCase().includes('email')) {
+            setEmailError(errorMessage);
+          } else if (errorMessage.toLowerCase().includes('password')) {
+            setPasswordError(errorMessage);
+          }
+        }
+
+        toast.error(errorMessage);
         setIsLoading(false);
         return;
       }
 
-      secureLog('Starting secure account creation', { email, name });
-      
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      if (userCredential.user) {
-        await updateProfile(userCredential.user, { displayName: name });
-      }
-      
-      try {
-        await createUserProfile(userCredential.user);
-        window.dispatchEvent(new CustomEvent('user-data-loaded', { detail: { userId: userCredential.user.uid } }));
-      } catch {
-        // Continue with redirect even if profile setup fails
-      }
+      // Notify auth context of successful registration
+      window.dispatchEvent(new CustomEvent('auth-success', { detail: { user: data.user } }));
       
       secureLog('Account creation successful');
       setPassword('');
       setConfirmPassword('');
       toast.success('Account created successfully! Welcome to ResumeBuddy!');
-      // Use replace to avoid adding to browser history
+      // Brief delay to let auth context process the event before navigation
+      await new Promise(resolve => setTimeout(resolve, 100));
       router.replace(getReturnUrl());
-    } catch (error: any) {
-      secureLog('Account creation failed', { error: error.message });
+    } catch (error: unknown) {
+      secureLog('Account creation failed', { error: String(error) });
       setPassword('');
       setConfirmPassword('');
-      toast.error(error.message || 'Failed to create account.');
+      toast.error('Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  });
+  };
 
   const handleGoogleSignUp = async () => {
     setIsLoading(true);
@@ -487,7 +499,7 @@ export default function SignupPage() {
 
           {/* Security footer */}
           <p className="text-[11px] text-center text-muted-foreground/70 pt-1">
-             Secured by Firebase Auth with enterprise-grade encryption
+            🔒 Secured with enterprise-grade encryption
           </p>
         </div>
       </div>

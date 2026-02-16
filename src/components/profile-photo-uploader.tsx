@@ -6,11 +6,7 @@ import { Button } from '@/components/ui/button';
 
 import { Trash2, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
-import { uploadProfilePhoto, deleteProfilePhoto, checkSupabaseSetup } from '@/lib/supabase';
 import { ImageEditor } from './image-editor';
-import { updateProfile } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { updateUserProfile } from '@/app/actions';
 
 interface ProfilePhotoUploaderProps {
   userId: string;
@@ -74,24 +70,23 @@ export function ProfilePhotoUploader({
       const preview = URL.createObjectURL(file);
       setPreviewUrl(preview);
 
-      // Upload to Supabase
-      const photoUrl = await uploadProfilePhoto(userId, file);
-      
-      // Update Firebase Auth profile
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        await updateProfile(currentUser, {
-          photoURL: photoUrl
-        });
+      // Upload via API (MinIO storage)
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      const res = await fetch('/api/auth/profile/photo', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to upload photo');
       }
 
-      // Update profile in database
-      const formData = new FormData();
-      formData.append('photoURL', photoUrl);
-      if (currentUser?.displayName) {
-        formData.append('displayName', currentUser.displayName);
-      }
-      await updateUserProfile(userId, formData);
+      const photoUrl = data.avatarUrl || data.photoUrl || data.url;
       
       // Call the parent component's handler to update UI
       onPhotoChange(photoUrl);
@@ -99,18 +94,7 @@ export function ProfilePhotoUploader({
       toast.success('Profile photo updated successfully!');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to upload photo. Please try again.';
-      
-      // Provide specific guidance for common errors
-      if (errorMessage.includes('row-level security')) {
-        toast.error('Storage permissions issue. Please check if you are signed in and try again.');
-      } else if (errorMessage.includes('Bucket not found')) {
-        toast.error('Storage bucket not found. Please create the "profile-photos" bucket in Supabase.');
-      } else if (errorMessage.includes('JWT')) {
-        toast.error('Authentication issue. Please sign out and sign back in.');
-      } else {
-        toast.error(errorMessage);
-      }
-      
+      toast.error(errorMessage);
       setPreviewUrl(null);
     } finally {
       setIsUploading(false);
@@ -133,32 +117,21 @@ export function ProfilePhotoUploader({
     setIsDeleting(true);
     
     try {
-      const success = await deleteProfilePhoto(userId, currentPhotoUrl);
-      
-      if (success) {
-        // Update Firebase Auth profile
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-          await updateProfile(currentUser, {
-            photoURL: null
-          });
-        }
+      const res = await fetch('/api/auth/profile/photo', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
 
-        // Update profile in database
-        const formData = new FormData();
-        formData.append('photoURL', '');
-        if (currentUser?.displayName) {
-          formData.append('displayName', currentUser.displayName);
-        }
-        await updateUserProfile(userId, formData);
-        
-        // Update UI
-        onPhotoChange(null);
-        setPreviewUrl(null);
-        toast.success('Profile photo removed successfully!');
-      } else {
-        toast.error('Failed to remove photo. Please try again.');
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to remove photo');
       }
+
+      // Update UI
+      onPhotoChange(null);
+      setPreviewUrl(null);
+      toast.success('Profile photo removed successfully!');
     } catch (error) {
       toast.error('Failed to remove photo. Please try again.');
     } finally {

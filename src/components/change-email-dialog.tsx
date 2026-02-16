@@ -11,8 +11,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { toast } from 'sonner';
-import { verifyBeforeUpdateEmail, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { User } from 'firebase/auth';
 
 const emailFormSchema = z.object({
   newEmail: z.string().email('Please enter a valid email address'),
@@ -22,7 +20,7 @@ const emailFormSchema = z.object({
 interface ChangeEmailDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  user: User;
+  user: { id?: string; uid?: string; email?: string | null };
 }
 
 export function ChangeEmailDialog({ isOpen, onClose, user }: ChangeEmailDialogProps) {
@@ -37,46 +35,48 @@ export function ChangeEmailDialog({ isOpen, onClose, user }: ChangeEmailDialogPr
     },
   });
 
-  const reauthenticateUser = async (currentPassword: string) => {
-    if (!user?.email) throw new Error('No user email found');
-    const credential = EmailAuthProvider.credential(user.email, currentPassword);
-    await reauthenticateWithCredential(user, credential);
-  };
-
   const onSubmit = async (values: z.infer<typeof emailFormSchema>) => {
     setIsChangingEmail(true);
 
     const promise = async () => {
-      // Step 1: Reauthenticate user before changing email
-      await reauthenticateUser(values.currentPassword);
+      const res = await fetch('/api/auth/email/change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          newEmail: values.newEmail,
+          currentPassword: values.currentPassword,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const error = new Error(data.error || 'Failed to change email');
+        (error as any).status = res.status;
+        throw error;
+      }
       
-      // Step 2: Send verification email to new address before updating
-      await verifyBeforeUpdateEmail(user, values.newEmail);
-      
-      return "Verification email sent! Please check your new email address and click the verification link to complete the email change.";
+      return 'Email address updated successfully!';
     };
 
     toast.promise(promise(), {
-      loading: 'Sending verification email...',
+      loading: 'Updating email address...',
       success: (message) => {
         form.reset();
         onClose();
         return message;
       },
-      error: (error) => {
+      error: (error: any) => {
         console.error('Email update error:', error);
-        if (error.code === 'auth/wrong-password') {
+        if (error.status === 401) {
           return 'Incorrect current password';
-        } else if (error.code === 'auth/email-already-in-use') {
+        } else if (error.status === 409) {
           return 'This email is already in use by another account';
-        } else if (error.code === 'auth/invalid-email') {
-          return 'Invalid email address';
-        } else if (error.code === 'auth/requires-recent-login') {
-          return 'Please log out and log back in before changing your email';
-        } else if (error.code === 'auth/operation-not-allowed') {
-          return 'Email verification is required. Please check your email and verify before updating.';
+        } else if (error.status === 400) {
+          return error.message || 'Invalid email address';
         }
-        return 'Failed to send verification email. Please try again.';
+        return 'Failed to update email. Please try again.';
       },
       finally: () => setIsChangingEmail(false),
     });
@@ -154,13 +154,10 @@ export function ChangeEmailDialog({ isOpen, onClose, user }: ChangeEmailDialogPr
             />
 
             <div className="text-sm bg-muted p-4 rounded-lg">
-              <strong>Email Change Process:</strong><br/>
-              <div className="mt-2 space-y-1 text-muted-foreground text-xs">
-                <div>1. Enter your new email and current password</div>
-                <div>2. Click "Send Verification Email"</div>
-                <div>3. Check your new email for a verification link</div>
-                <div>4. Click the verification link to complete the change</div>
-              </div>
+              <strong>Note:</strong>
+              <p className="mt-1 text-muted-foreground text-xs">
+                Your email will be updated immediately after verification. You will use the new email to sign in.
+              </p>
             </div>
 
             <DialogFooter>
@@ -180,7 +177,7 @@ export function ChangeEmailDialog({ isOpen, onClose, user }: ChangeEmailDialogPr
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 )}
                 <Mail className="mr-2 h-4 w-4" />
-                Send Verification Email
+                Update Email
               </Button>
             </DialogFooter>
           </form>

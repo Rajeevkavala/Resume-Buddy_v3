@@ -40,18 +40,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { UserData } from '@/types/admin';
 
-interface UsageStats {
-  totalRequests: number;
-  activeUsersToday: number;
-  requestsByProvider: Record<string, number>;
-  topUsers: Array<{ uid: string; email: string; count: number }>;
-}
+import type { AggregatedStats, HistoricalDataPoint } from '@/lib/admin/api-usage-tracking';
 
-interface HistoricalData {
-  dailyUsage: Array<{ date: string; requests: number; uniqueUsers: number }>;
-  hourlyDistribution: Array<{ hour: number; requests: number }>;
-  userUsageDistribution: Array<{ userId: string; email: string; daily: number; monthly: number; total: number }>;
-}
+type UsageStats = AggregatedStats;
+type HistoricalData = HistoricalDataPoint[];
 
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
@@ -134,7 +126,7 @@ export default function ApiUsagePage() {
   const { user } = useAuth();
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [users, setUsers] = useState<UserData[]>([]);
-  const [historicalData, setHistoricalData] = useState<HistoricalData | null>(null);
+  const [historicalData, setHistoricalData] = useState<HistoricalData>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<string>('7');
   const [logCount, setLogCount] = useState<number>(0);
@@ -163,7 +155,7 @@ export default function ApiUsagePage() {
         setUsers(usersResult.data);
       }
       if (historicalResult.success && historicalResult.data) {
-        setHistoricalData(historicalResult.data);
+        setHistoricalData(Array.isArray(historicalResult.data) ? historicalResult.data : []);
       }
       if (logCountResult.success) {
         setLogCount(logCountResult.count);
@@ -180,18 +172,19 @@ export default function ApiUsagePage() {
   const totalMonthlyUsage = users.reduce((sum, u) => sum + (u.apiUsage?.monthlyCount || 0), 0);
   const usersWithUsage = users.filter(u => (u.apiUsage?.totalCount || 0) > 0);
 
-  // Prepare data for pie chart
-  const pieData = historicalData?.userUsageDistribution.slice(0, 5).map((u, i) => ({
+  // Prepare data for pie chart from users with usage
+  const pieData = usersWithUsage.slice(0, 5).map((u, i) => ({
     name: u.email.split('@')[0],
-    value: u.total,
+    value: u.apiUsage?.totalCount || 0,
     fill: CHART_COLORS[i % CHART_COLORS.length],
-  })) || [];
+  }));
 
-  // Format hourly data for better display
-  const formattedHourlyData = historicalData?.hourlyDistribution.map(h => ({
-    ...h,
-    hourLabel: `${h.hour.toString().padStart(2, '0')}:00`,
-  })) || [];
+  // Historical data is already HistoricalDataPoint[]
+  const dailyUsageData = historicalData.map(d => ({
+    date: d.date,
+    calls: d.calls,
+    uniqueUsers: d.uniqueUsers,
+  }));
 
   // Handle cleanup of old logs
   async function handleCleanupLogs() {
@@ -267,7 +260,7 @@ export default function ApiUsagePage() {
             <Activity className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold">{stats?.totalRequests.toLocaleString() || 0}</div>
+            <div className="text-2xl sm:text-3xl font-bold">{stats?.totalCalls?.toLocaleString() || 0}</div>
             <p className="text-xs text-muted-foreground">All time API calls</p>
           </CardContent>
         </Card>
@@ -300,7 +293,7 @@ export default function ApiUsagePage() {
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl sm:text-3xl font-bold">{stats?.activeUsersToday || 0}</div>
+            <div className="text-2xl sm:text-3xl font-bold">{stats?.activeUsers || 0}</div>
             <p className="text-xs text-muted-foreground">Users active today</p>
           </CardContent>
         </Card>
@@ -372,7 +365,7 @@ export default function ApiUsagePage() {
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <ChartContainer config={chartConfig} className="h-[300px] sm:h-[400px] w-full min-w-[300px]">
-                <AreaChart data={historicalData?.dailyUsage || []} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <AreaChart data={dailyUsageData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
@@ -394,7 +387,7 @@ export default function ApiUsagePage() {
                   <Legend />
                   <Area
                     type="monotone"
-                    dataKey="requests"
+                    dataKey="calls"
                     stroke="hsl(var(--chart-1))"
                     fillOpacity={1}
                     fill="url(#colorRequests)"
@@ -414,27 +407,27 @@ export default function ApiUsagePage() {
           </Card>
         </TabsContent>
 
-        {/* Hourly Distribution Chart */}
+        {/* Hourly Distribution Chart — replaced with tokens chart */}
         <TabsContent value="hourly" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-primary" />
-                Hourly Request Distribution
+                Token Usage Over Time
               </CardTitle>
               <CardDescription>
-                API requests distributed by hour of the day (last {timeRange} days)
+                Token consumption over the last {timeRange} days
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <ChartContainer config={chartConfig} className="h-[300px] sm:h-[400px] w-full min-w-[300px]">
-                <BarChart data={formattedHourlyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <BarChart data={dailyUsageData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="hourLabel" className="text-xs" />
+                  <XAxis dataKey="date" className="text-xs" tickFormatter={(v) => new Date(v).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} />
                   <YAxis className="text-xs" />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar 
-                    dataKey="requests" 
+                    dataKey="calls" 
                     fill="hsl(var(--chart-1))"
                     radius={[4, 4, 0, 0]}
                   />
@@ -461,7 +454,7 @@ export default function ApiUsagePage() {
               <CardContent className="overflow-x-auto">
                 <ChartContainer config={chartConfig} className="h-[300px] sm:h-[400px] w-full min-w-[300px]">
                   <BarChart 
-                    data={historicalData?.userUsageDistribution.slice(0, 10) || []} 
+                    data={usersWithUsage.slice(0, 10).map(u => ({ email: u.email, total: u.apiUsage?.totalCount || 0 }))} 
                     layout="vertical"
                     margin={{ top: 10, right: 30, left: 100, bottom: 0 }}
                   >
@@ -531,14 +524,14 @@ export default function ApiUsagePage() {
             <CardContent className="overflow-x-auto">
               <ChartContainer config={chartConfig} className="h-[300px] sm:h-[400px] w-full min-w-[300px]">
                 <BarChart 
-                  data={historicalData?.userUsageDistribution.slice(0, 10) || []}
+                  data={usersWithUsage.slice(0, 10).map(u => ({ email: u.email, daily: u.apiUsage?.dailyCount || 0, monthly: u.apiUsage?.monthlyCount || 0 }))}
                   margin={{ top: 10, right: 30, left: 0, bottom: 60 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis 
                     dataKey="email" 
                     className="text-xs"
-                    tickFormatter={(value) => value.split('@')[0].slice(0, 10)}
+                    tickFormatter={(value: string) => value.split('@')[0].slice(0, 10)}
                     angle={-45}
                     textAnchor="end"
                   />
@@ -573,23 +566,22 @@ export default function ApiUsagePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stats?.topUsers.map((topUser, index) => {
-                    const fullUser = users.find(u => u.uid === topUser.uid);
-                    const dailyUsed = fullUser?.apiUsage?.dailyCount || 0;
-                    const monthlyUsed = fullUser?.apiUsage?.monthlyCount || 0;
-                    const dailyLimit = fullUser?.limits?.dailyLimit ?? 10;
-                    const monthlyLimit = fullUser?.limits?.monthlyLimit ?? 300;
+                  {usersWithUsage.slice(0, 20).map((topUser, index) => {
+                    const dailyUsed = topUser.apiUsage?.dailyCount || 0;
+                    const monthlyUsed = topUser.apiUsage?.monthlyCount || 0;
+                    const dailyLimit = topUser.limits?.dailyLimit ?? 10;
+                    const monthlyLimit = topUser.limits?.monthlyLimit ?? 300;
                     return (
                       <TableRow key={topUser.uid} className="border-border/50 hover:bg-muted/50">
                         <TableCell className="font-medium">#{index + 1}</TableCell>
                         <TableCell className="text-foreground">{topUser.email}</TableCell>
-                        <TableCell className="font-bold text-foreground">{topUser.count.toLocaleString()}</TableCell>
+                        <TableCell className="font-bold text-foreground">{(topUser.apiUsage?.totalCount || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-foreground">{`${dailyUsed}/${dailyLimit}`}</TableCell>
                         <TableCell className="text-foreground">{`${monthlyUsed}/${monthlyLimit}`}</TableCell>
                       </TableRow>
                     );
                   })}
-                  {(!stats?.topUsers || stats.topUsers.length === 0) && (
+                  {usersWithUsage.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                         No usage data available

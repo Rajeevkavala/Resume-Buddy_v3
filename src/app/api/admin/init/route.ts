@@ -1,73 +1,55 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, addDoc, Timestamp } from 'firebase/firestore';
+import { prisma } from '@/lib/db';
 
 // Initial admin email
 const ADMIN_EMAIL = 'resumebuddy0@gmail.com';
 
 export async function POST() {
   try {
-    // Check if already initialized
-    const whitelistRef = doc(db, 'whitelist', ADMIN_EMAIL);
-    const existingDoc = await getDoc(whitelistRef);
+    // Check if admin already exists
+    const existing = await prisma.user.findUnique({
+      where: { email: ADMIN_EMAIL },
+    });
 
-    if (existingDoc.exists()) {
+    if (existing && existing.role === 'ADMIN') {
       return NextResponse.json({
         success: true,
         message: 'Admin already initialized',
-        admin: existingDoc.data(),
+        admin: { email: existing.email, role: 'admin', status: existing.status.toLowerCase() },
       });
     }
 
-    // Create whitelist entry for admin
-    await setDoc(whitelistRef, {
-      email: ADMIN_EMAIL,
-      role: 'admin',
-      status: 'active',
-      addedBy: 'system',
-      addedAt: Timestamp.now(),
-      notes: 'Initial super admin - Resume Buddy',
+    // Upsert the admin user
+    const admin = await prisma.user.upsert({
+      where: { email: ADMIN_EMAIL },
+      update: { role: 'ADMIN', status: 'ACTIVE' },
+      create: {
+        email: ADMIN_EMAIL,
+        name: 'Resume Buddy Admin',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        passwordHash: '', // Admin logs in via Google OAuth
+      },
     });
 
-    // Create app_config
-    const configRef = doc(db, 'app_config', 'settings');
-    const configDoc = await getDoc(configRef);
-
-    if (!configDoc.exists()) {
-      await setDoc(configRef, {
-        whitelistEnabled: true,
-        allowPublicSignup: false,
-        defaultDailyLimit: 10,
-        defaultMonthlyLimit: 300,
-        adminDailyLimit: 100,
-        adminMonthlyLimit: 300,
-        maintenanceMode: false,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      });
-    }
-
     // Log the initialization
-    await addDoc(collection(db, 'admin_actions'), {
-      adminId: 'system',
-      adminEmail: 'system',
-      action: 'system_init',
-      targetEmail: ADMIN_EMAIL,
-      details: {
-        message: 'Admin panel initialized via API',
+    await prisma.adminAction.create({
+      data: {
+        adminId: admin.id,
+        action: 'system_init',
+        targetId: admin.id,
+        details: {
+          message: 'Admin panel initialized via API',
+          targetEmail: ADMIN_EMAIL,
+          adminEmail: 'system',
+        },
       },
-      timestamp: Timestamp.now(),
     });
 
     return NextResponse.json({
       success: true,
       message: 'Admin initialized successfully',
-      admin: {
-        email: ADMIN_EMAIL,
-        role: 'admin',
-        status: 'active',
-      },
-      collections: ['whitelist', 'app_config', 'admin_actions'],
+      admin: { email: ADMIN_EMAIL, role: 'admin', status: 'active' },
     });
 
   } catch (error) {
@@ -81,13 +63,15 @@ export async function POST() {
 
 export async function GET() {
   try {
-    const whitelistRef = doc(db, 'whitelist', ADMIN_EMAIL);
-    const whitelistDoc = await getDoc(whitelistRef);
+    const admin = await prisma.user.findUnique({
+      where: { email: ADMIN_EMAIL },
+      select: { email: true, role: true, status: true, createdAt: true },
+    });
 
-    if (whitelistDoc.exists()) {
+    if (admin && admin.role === 'ADMIN') {
       return NextResponse.json({
         initialized: true,
-        admin: whitelistDoc.data(),
+        admin: { email: admin.email, role: 'admin', status: admin.status.toLowerCase() },
       });
     }
 

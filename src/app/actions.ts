@@ -24,7 +24,7 @@ import type {EvaluateCodeInput} from '@/ai/flows/evaluate-code-solution';
 import {Packer, Document, Paragraph, TextRun, HeadingLevel} from 'docx';
 import mammoth from 'mammoth';
 import pdf from 'pdf-parse-fork';
-import { saveData as saveToDb, clearData as clearFromDb, updateUserProfileInDb } from '@/lib/data-persistence';
+import { saveData as saveToDb, clearData as clearFromDb, loadData as loadFromDb, updateUserProfileInDb } from '@/lib/data-persistence';
 import type { AnalysisResult, JobRole } from '@/lib/types';
 import type { AnalyzeResumeContentOutput } from '@/ai/flows/analyze-resume-content';
 // Firebase Storage import removed — profile photos use Supabase (client-side)
@@ -38,6 +38,17 @@ import {
   getSubscriptionState,
   checkExportLimit,
 } from '@/lib/subscription-service';
+import {
+  createInterviewSession,
+  saveSessionQuestions,
+  saveSessionAnswer,
+  updateInterviewSession,
+} from '@/lib/interview-service';
+import type {
+  InterviewSession,
+  InterviewQuestion,
+  InterviewAnswer,
+} from '@/lib/types/interview';
 import type { SubscriptionState } from '@/lib/types/subscription';
 
 const baseSchema = z.object({
@@ -50,6 +61,18 @@ const baseSchema = z.object({
     .optional(),
   jobRole: z.string().optional(),
 });
+
+// ============ Timeout Utility for AI Calls ============
+const AI_CALL_TIMEOUT_MS = 60_000; // 60 seconds max for any AI call
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs = AI_CALL_TIMEOUT_MS, label = 'AI call'): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs / 1000}s. Please try again.`)), timeoutMs)
+    ),
+  ]);
+}
 
 const qaSchema = baseSchema.extend({
     topic: z.enum([
@@ -114,6 +137,20 @@ export async function clearData(userId: string) {
   return clearFromDb(userId);
 }
 
+/**
+ * Load resume data from PostgreSQL for a user.
+ * Called when user logs in and localStorage cache is empty.
+ */
+export async function loadResumeDataAction(userId: string): Promise<AnalysisResult | null> {
+  if (!userId) return null;
+  try {
+    return await loadFromDb(userId);
+  } catch (error) {
+    console.error('Error loading resume data:', error);
+    return null;
+  }
+}
+
 export async function runAnalysisAction(input: {
   userId: string;
   resumeText: string;
@@ -142,11 +179,15 @@ export async function runAnalysisAction(input: {
     }
   }
   
-  const analysis = await analyzeResumeContent({
-    resumeText: validatedFields.data.resumeText,
-    jobDescription: finalJobDescription,
-    userId: input.userId,
-  });
+  const analysis = await withTimeout(
+    analyzeResumeContent({
+      resumeText: validatedFields.data.resumeText,
+      jobDescription: finalJobDescription,
+      userId: input.userId,
+    }),
+    AI_CALL_TIMEOUT_MS,
+    'Resume analysis'
+  );
   
   // Prepare data for saving - exclude undefined values
   const dataToSave: any = { 
@@ -198,12 +239,16 @@ export async function runQAGenerationAction(input: {
     }
   }
   
-  const qaResult = await generateResumeQA({
-    resumeText: validatedFields.data.resumeText,
-    topic: validatedFields.data.topic,
-    numQuestions: validatedFields.data.numQuestions,
-    userId: input.userId,
-  });
+  const qaResult = await withTimeout(
+    generateResumeQA({
+      resumeText: validatedFields.data.resumeText,
+      topic: validatedFields.data.topic,
+      numQuestions: validatedFields.data.numQuestions,
+      userId: input.userId,
+    }),
+    AI_CALL_TIMEOUT_MS,
+    'QA generation'
+  );
 
   // Prepare data for saving - exclude undefined values
   const dataToSave: any = {
@@ -249,14 +294,18 @@ export async function runInterviewGenerationAction(input: GenerateInterviewQuest
     }
   }
   
-  const interview = await generateInterviewQuestions({
-    resumeText: validatedFields.data.resumeText,
-    jobDescription: finalJobDescription,
-    numQuestions: validatedFields.data.numQuestions,
-    interviewType: validatedFields.data.interviewType,
-    difficultyLevel: validatedFields.data.difficultyLevel,
-    userId: input.userId,
-  });
+  const interview = await withTimeout(
+    generateInterviewQuestions({
+      resumeText: validatedFields.data.resumeText,
+      jobDescription: finalJobDescription,
+      numQuestions: validatedFields.data.numQuestions,
+      interviewType: validatedFields.data.interviewType,
+      difficultyLevel: validatedFields.data.difficultyLevel,
+      userId: input.userId,
+    }),
+    AI_CALL_TIMEOUT_MS,
+    'Interview question generation'
+  );
   
   // Prepare data for saving - exclude undefined values
   const dataToSave: any = { 
@@ -353,6 +402,47 @@ export async function getFollowUpAction(input: FollowUpInput & { userId: string 
   return generateFollowUpQuestion(followUpInput);
 }
 
+// --- Interview persistence (server-side) ---
+
+export async function persistInterviewSessionAction(input: {
+  userId: string;
+  session: InterviewSession;
+}) {
+  await enforceRateLimitAsync(input.userId, 'interview-session');
+  await createInterviewSession(input.session);
+  return { ok: true };
+}
+
+export async function persistInterviewQuestionsAction(input: {
+  userId: string;
+  sessionId: string;
+  questions: InterviewQuestion[];
+}) {
+  await enforceRateLimitAsync(input.userId, 'interview-session');
+  await saveSessionQuestions(input.sessionId, input.questions);
+  return { ok: true };
+}
+
+export async function persistInterviewAnswerAction(input: {
+  userId: string;
+  sessionId: string;
+  answer: InterviewAnswer;
+}) {
+  await enforceRateLimitAsync(input.userId, 'interview-session');
+  await saveSessionAnswer(input.sessionId, input.answer);
+  return { ok: true };
+}
+
+export async function persistInterviewSessionUpdateAction(input: {
+  userId: string;
+  sessionId: string;
+  updates: Partial<Pick<InterviewSession, 'status' | 'progress' | 'timing' | 'difficulty'>>;
+}) {
+  await enforceRateLimitAsync(input.userId, 'interview-session');
+  await updateInterviewSession(input.sessionId, input.updates);
+  return { ok: true };
+}
+
 export async function runImprovementsGenerationAction(input: {
   userId: string;
   resumeText: string;
@@ -382,12 +472,16 @@ export async function runImprovementsGenerationAction(input: {
     }
   }
   
-  const improvements = await suggestResumeImprovements({
-    resumeText: validatedFields.data.resumeText,
-    jobDescription: finalJobDescription,
-    previousAnalysis: input.previousAnalysis || undefined,
-    userId: input.userId,
-  });
+  const improvements = await withTimeout(
+    suggestResumeImprovements({
+      resumeText: validatedFields.data.resumeText,
+      jobDescription: finalJobDescription,
+      previousAnalysis: input.previousAnalysis || undefined,
+      userId: input.userId,
+    }),
+    AI_CALL_TIMEOUT_MS,
+    'Improvement suggestions'
+  );
   
   // Prepare data for saving - exclude undefined values
   const dataToSave: any = { 
@@ -449,14 +543,18 @@ export async function runCoverLetterGenerationAction(input: {
     }
   }
   
-  const coverLetter = await generateCoverLetter({
-    resumeText: validatedFields.data.resumeText,
-    jobDescription: finalJobDescription,
-    companyName: input.companyName,
-    hiringManagerName: input.hiringManagerName,
-    tone: input.tone || 'professional',
-    userId: input.userId,
-  });
+  const coverLetter = await withTimeout(
+    generateCoverLetter({
+      resumeText: validatedFields.data.resumeText,
+      jobDescription: finalJobDescription,
+      companyName: input.companyName,
+      hiringManagerName: input.hiringManagerName,
+      tone: input.tone || 'professional',
+      userId: input.userId,
+    }),
+    AI_CALL_TIMEOUT_MS,
+    'Cover letter generation'
+  );
   
   // Save to database
   const dataToSave: any = { 
@@ -955,6 +1053,35 @@ export async function extractJobDescriptionFromUrl(url: string, userId?: string)
     // Validate URL
     const validatedData = jobUrlSchema.parse({ url });
     
+    // SSRF Protection: Block requests to internal/private networks
+    try {
+      const parsedUrl = new URL(validatedData.url);
+      const hostname = parsedUrl.hostname.toLowerCase();
+      
+      // Block private/internal hostnames
+      const blockedHostnames = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', 'metadata.google.internal'];
+      if (blockedHostnames.includes(hostname)) {
+        return { success: false, error: 'Invalid URL: internal addresses are not allowed.' };
+      }
+      
+      // Block private IP ranges (10.x, 172.16-31.x, 192.168.x, 169.254.x)
+      const ipMatch = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+      if (ipMatch) {
+        const [, a, b] = ipMatch.map(Number);
+        if (a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) ||
+            (a === 192 && b === 168) || (a === 169 && b === 254) || a === 0) {
+          return { success: false, error: 'Invalid URL: private IP addresses are not allowed.' };
+        }
+      }
+      
+      // Only allow http and https protocols
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        return { success: false, error: 'Invalid URL: only HTTP/HTTPS protocols are allowed.' };
+      }
+    } catch {
+      return { success: false, error: 'Invalid URL format.' };
+    }
+    
     // Set headers to mimic a real browser
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -1070,10 +1197,14 @@ export async function extractJobDescriptionFromUrl(url: string, userId?: string)
 
     // STEP 2: Use AI to structure the raw content
     try {
-      const structuredData = await structureJobDescription({
-        rawContent: rawContent.substring(0, 15000), // Limit to prevent token overflow
-        url: validatedData.url,
-      });
+      const structuredData = await withTimeout(
+        structureJobDescription({
+          rawContent: rawContent.substring(0, 15000), // Limit to prevent token overflow
+          url: validatedData.url,
+        }),
+        AI_CALL_TIMEOUT_MS,
+        'Job description structuring'
+      );
 
       // Validate that we got meaningful structured data
       if (!structuredData.jobTitle || structuredData.responsibilities.length === 0) {
@@ -1199,7 +1330,11 @@ export async function parseResumeIntelligentlyAction(
       await enforceRateLimitAsync(userId, 'parse-resume');
     }
 
-    const result = await parseResumeIntelligently({ resumeText });
+    const result = await withTimeout(
+      parseResumeIntelligently({ resumeText }),
+      AI_CALL_TIMEOUT_MS,
+      'Resume parsing'
+    );
     
     return {
       success: true,

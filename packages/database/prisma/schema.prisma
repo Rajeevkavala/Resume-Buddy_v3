@@ -199,6 +199,26 @@ model Subscription {
   @@map("subscriptions")
 }
 
+// ============ App Configuration Models ============
+
+// Singleton row (id=1) that stores subscription pricing and behavior.
+// This replaces non-persistent in-memory/env-only settings for admin panel.
+model SubscriptionConfig {
+  id             Int      @id
+  priceINR        Int      @map("price_inr")
+  pricePaise      Int      @map("price_paise")
+  testPriceINR    Int      @map("test_price_inr")
+  testPricePaise  Int      @map("test_price_paise")
+  durationDays    Int      @map("duration_days")
+  isTestMode      Boolean  @default(false) @map("is_test_mode")
+  currency        String   @default("INR") @db.VarChar(10)
+  updatedBy       String?  @map("updated_by") @db.VarChar(255)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("subscription_config")
+}
+
 model Payment {
   id                String        @id @default(uuid()) @db.Uuid
   userId            String        @map("user_id") @db.VarChar(128)
@@ -261,6 +281,7 @@ model ResumeData {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   interviews      Interview[]
   generatedResumes GeneratedResume[]
+  storedFiles     StoredFile[]
 
   @@index([userId, isActive])
   @@index([userId, createdAt])
@@ -300,6 +321,7 @@ model Interview {
 model StoredFile {
   id          String    @id @default(uuid()) @db.Uuid
   userId      String    @map("user_id") @db.VarChar(128)
+  resumeDataId String?  @db.Uuid @map("resume_data_id")
   filename    String    @db.VarChar(255)
   originalName String   @db.VarChar(255) @map("original_name")
   mimeType    String    @db.VarChar(100) @map("mime_type")
@@ -313,6 +335,7 @@ model StoredFile {
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeData  ResumeData? @relation(fields: [resumeDataId], references: [id], onDelete: SetNull)
   generatedResumes GeneratedResume[]
 
   @@index([userId, createdAt])
@@ -341,4 +364,52 @@ model GeneratedResume {
 
   @@index([userId, createdAt])
   @@map("generated_resumes")
+}
+
+// ============ Admin & Analytics Models ============
+
+model AdminAction {
+  id          String   @id @default(uuid()) @db.Uuid
+  adminId     String   @map("admin_id") @db.VarChar(128)
+  action      String   @db.VarChar(100)
+  targetId    String?  @map("target_id") @db.VarChar(128)
+  details     Json?
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([adminId, createdAt])
+  @@index([action])
+  @@map("admin_actions")
+}
+
+model ApiCallLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.VarChar(128)
+  provider    String   @db.VarChar(50)
+  operation   String   @db.VarChar(100)
+  tokensUsed  Int      @default(0) @map("tokens_used")
+  latencyMs   Int?     @map("latency_ms")
+  success     Boolean  @default(true)
+  error       String?  @db.Text
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([provider, createdAt])
+  @@index([createdAt])
+  @@map("api_call_logs")
+}
+
+model UserActivity {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.VarChar(128)
+  action      String   @db.VarChar(100)
+  details     Json?
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@index([action])
+  @@map("user_activity")
 }

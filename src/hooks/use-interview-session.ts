@@ -15,13 +15,11 @@ import {
   evaluateAnswerAction,
   evaluateCodeAction,
   getFollowUpAction,
+  persistInterviewSessionAction,
+  persistInterviewQuestionsAction,
+  persistInterviewAnswerAction,
+  persistInterviewSessionUpdateAction,
 } from '@/app/actions';
-import {
-  createInterviewSession,
-  saveSessionQuestions,
-  saveSessionAnswer,
-  updateInterviewSession,
-} from '@/lib/firestore-interview';
 import { notifyAIRequestMade } from '@/hooks/use-daily-usage';
 import { toast } from 'sonner';
 import type {
@@ -33,6 +31,7 @@ import type {
   SessionStatus,
   CodeLanguage,
   InterviewDifficulty,
+  QuestionStatus,
 } from '@/lib/types/interview';
 import { calculateAdaptiveDifficulty } from '@/lib/types/interview';
 
@@ -77,7 +76,7 @@ const initialState: SessionState = {
 /** Fire-and-forget Firestore persistence — never block the session */
 function persistAsync(fn: () => Promise<void>) {
   fn().catch((err) => {
-    console.warn('[InterviewSession] Firestore persistence failed:', err?.message || err);
+    console.warn('[InterviewSession] Persistence failed:', err?.message || err);
   });
 }
 
@@ -121,7 +120,7 @@ export function useInterviewSession(userId: string) {
             const baseQuestion = {
               id: `q_${i}`,
               index: i,
-              status: i === 0 ? 'current' : ('pending' as const),
+              status: (i === 0 ? 'current' : 'pending') as QuestionStatus,
               type: config.type,
               difficulty: config.difficulty,
               question: q.question,
@@ -180,8 +179,8 @@ export function useInterviewSession(userId: string) {
 
         // Persist to Firestore (non-blocking — don't fail session if storage errors)
         persistAsync(async () => {
-          await createInterviewSession(session);
-          await saveSessionQuestions(sessionId, questions);
+          await persistInterviewSessionAction({ userId, session });
+          await persistInterviewQuestionsAction({ userId, sessionId, questions });
         });
 
         // Track credit usage
@@ -270,7 +269,7 @@ export function useInterviewSession(userId: string) {
         };
 
         // Persist (non-blocking)
-        persistAsync(() => saveSessionAnswer(sessionIdRef.current, answer));
+        persistAsync(() => persistInterviewAnswerAction({ userId, sessionId: sessionIdRef.current, answer }));
 
         // Track credit usage
         notifyAIRequestMade();
@@ -345,7 +344,7 @@ export function useInterviewSession(userId: string) {
         };
 
         // Persist (non-blocking)
-        persistAsync(() => saveSessionAnswer(sessionIdRef.current, answer));
+        persistAsync(() => persistInterviewAnswerAction({ userId, sessionId: sessionIdRef.current, answer }));
 
         // Track credit usage
         notifyAIRequestMade();
@@ -387,7 +386,10 @@ export function useInterviewSession(userId: string) {
       const avgScore = state.answers.length > 0 ? totalScore / state.answers.length : 0;
 
       persistAsync(() =>
-        updateInterviewSession(sessionIdRef.current, {
+        persistInterviewSessionUpdateAction({
+          userId,
+          sessionId: sessionIdRef.current,
+          updates: {
           status: 'completed',
           progress: {
             currentQuestionIndex: nextIndex,
@@ -405,6 +407,7 @@ export function useInterviewSession(userId: string) {
                 ? state.answers.reduce((s, a) => s + a.timeSpentMs, 0) /
                   state.answers.length
                 : 0,
+          },
           },
         })
       );
@@ -451,7 +454,7 @@ export function useInterviewSession(userId: string) {
       },
     };
 
-    persistAsync(() => saveSessionAnswer(sessionIdRef.current, answer));
+    persistAsync(() => persistInterviewAnswerAction({ userId, sessionId: sessionIdRef.current, answer }));
 
     setState((s) => ({
       ...s,
@@ -487,7 +490,10 @@ export function useInterviewSession(userId: string) {
       const avgScore = state.answers.length > 0 ? totalScore / state.answers.length : 0;
 
       persistAsync(() =>
-        updateInterviewSession(sessionIdRef.current, {
+        persistInterviewSessionUpdateAction({
+          userId,
+          sessionId: sessionIdRef.current,
+          updates: {
           status: 'completed',
           progress: {
             currentQuestionIndex: state.currentQuestionIndex,
@@ -505,6 +511,7 @@ export function useInterviewSession(userId: string) {
                 ? state.answers.reduce((s, a) => s + a.timeSpentMs, 0) /
                   state.answers.length
                 : 0,
+          },
           },
         })
       );

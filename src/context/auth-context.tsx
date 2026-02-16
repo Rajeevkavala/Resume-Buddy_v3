@@ -1,24 +1,35 @@
 'use client';
 
-import { createContext, useState, useEffect, useContext, ReactNode, startTransition } from 'react';
-import { onAuthStateChanged, User, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { createContext, useState, useEffect, useContext, ReactNode, startTransition, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createUserProfile, loadData } from '@/lib/firestore';
 import { toast } from 'sonner';
-import { getUserData, saveUserData, clearUserData } from '@/lib/local-storage';
+import { getUserData, clearUserData } from '@/lib/local-storage';
 import { initializeSecureStorage, secureSessionStorage } from '@/lib/secure-storage';
-import { fastAuthCheck, setFastAuthCookie, clearFastAuthCookie, clearAccessDeniedCookie } from '@/lib/fast-auth';
-import { uploadProfilePhotoFromURL } from '@/lib/supabase';
-// REMOVED: Whitelist-based access control - now using open registration with subscription tiers
-// import { checkEmailAccess } from '@/lib/access-control';
+
+// ============ Types ============
+
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  tier: 'free' | 'pro';
+  avatar: string | null;
+  emailVerified: boolean;
+  /** Backward-compat alias for Firebase `displayName` */
+  displayName: string | null;
+  /** Backward-compat alias for Firebase `photoURL` */
+  photoURL: string | null;
+  /** Backward-compat alias – same as `id` */
+  uid: string;
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: AppUser | null;
   loading: boolean;
   logout: () => void;
   signInWithGoogle: () => void;
-  forceReloadUser?: () => Promise<void>;
+  forceReloadUser: () => Promise<void>;
   isAllowed: boolean;
   accessDeniedReason: string;
 }
@@ -28,175 +39,135 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   logout: () => {},
   signInWithGoogle: () => {},
+  forceReloadUser: async () => {},
   isAllowed: true,
   accessDeniedReason: '',
 });
 
+// ============ Helpers ============
+
+/** Map API response user → AppUser (with backward-compat aliases) */
+function mapUser(apiUser: Record<string, unknown>): AppUser {
+  return {
+    id: apiUser.id as string,
+    email: apiUser.email as string,
+    name: (apiUser.name as string) || null,
+    role: (apiUser.role as string) || 'USER',
+    tier: (apiUser.tier as string) === 'pro' ? 'pro' : 'free',
+    avatar: (apiUser.avatar as string) || null,
+    emailVerified: (apiUser.emailVerified as boolean) ?? false,
+    displayName: (apiUser.name as string) || null,
+    photoURL: (apiUser.avatar as string) || null,
+    uid: apiUser.id as string,
+  };
+}
+
+// ============ Provider ============
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const [isAllowed, setIsAllowed] = useState<boolean>(true);
-  const [accessDeniedReason, setAccessDeniedReason] = useState<string>('');
+  const [isAllowed, setIsAllowed] = useState(true);
+  const [accessDeniedReason, setAccessDeniedReason] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Get the return URL from query params
   const getReturnUrl = (): string => {
     const returnTo = searchParams?.get('returnTo');
-    // Validate returnTo to prevent open redirect vulnerabilities
     if (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
       return returnTo;
     }
     return '/dashboard';
   };
 
-  const forceReloadUser = async () => {
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-        await currentUser.reload();
-        setUser({ ...currentUser });
-    }
-  };
+  // ---------- Fetch current session from API ----------
 
-  // ========== OPEN REGISTRATION ==========
-  // Function to grant access to authenticated users (no whitelist check)
-  // All authenticated users get Free tier access immediately
-  async function verifyUserAccess(firebaseUser: User): Promise<boolean> {
+  const fetchSession = useCallback(async (): Promise<AppUser | null> => {
     try {
-      if (!firebaseUser.email) {
-        console.log('⚠️ No email associated with account - still allowing access');
-        // Still allow access, but some features may be limited
-      }
-
-      // OPEN REGISTRATION: All authenticated users are allowed
-      console.log('✅ Access granted for:', firebaseUser.email || firebaseUser.uid);
-      clearAccessDeniedCookie();
-      setFastAuthCookie(firebaseUser.uid);
-      
-      startTransition(() => {
-        if (user && firebaseUser.uid !== user.uid) {
-          clearUserData(user.uid);
-        }
-        setUser(firebaseUser);
-        setIsAllowed(true); // Always allowed - tier-based limits handled by subscription system
-        setAccessDeniedReason('');
-        setLoading(false);
-        setInitialLoad(false);
-      });
-
-      // Load user data in background
-      Promise.resolve().then(async () => {
-        try {
-          await createUserProfile(firebaseUser);
-          const localData = getUserData(firebaseUser.uid);
-          if (!localData || Object.keys(localData).length === 0) {
-            const dbData = await loadData(firebaseUser.uid);
-            if (dbData && Object.keys(dbData).length > 0) {
-              saveUserData(firebaseUser.uid, dbData);
-            }
-          }
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('user-data-loaded', { detail: { userId: firebaseUser.uid } }));
-          }, 100);
-        } catch (error) {
-          // Silently handle profile loading errors
-        }
-      });
-
-      return true;
-    } catch (error) {
-      console.error('Error during user access:', error);
-      // On error, still allow access - graceful degradation
-      startTransition(() => {
-        setUser(firebaseUser);
-        setIsAllowed(true);
-        setAccessDeniedReason('');
-        setLoading(false);
-        setInitialLoad(false);
-      });
-      return true;
+      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.user) return null;
+      return mapUser(data.user);
+    } catch {
+      return null;
     }
-  }
+  }, []);
+
+  // ---------- Set user + fire data-loaded event ----------
+
+  const setAuthenticatedUser = useCallback((appUser: AppUser) => {
+    startTransition(() => {
+      setUser(appUser);
+      setIsAllowed(true);
+      setAccessDeniedReason('');
+      setLoading(false);
+    });
+
+    // Fire data-loaded event for other contexts
+    Promise.resolve().then(() => {
+      try {
+        getUserData(appUser.id); // prime local-storage
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('user-data-loaded', { detail: { userId: appUser.id } }));
+        }, 100);
+      } catch {
+        // Silently handle
+      }
+    });
+  }, []);
+
+  // ---------- Initial Load ----------
 
   useEffect(() => {
-    // Initialize secure storage on component mount
     initializeSecureStorage();
-    
-    // Fast auth check for immediate UI state
-    const { isLikelyAuthenticated } = fastAuthCheck();
-    
-    // Check for existing user immediately on mount
-    const currentUser = auth.currentUser;
-    if (currentUser && initialLoad) {
-      // Verify whitelist for existing sessions
-      verifyUserAccess(currentUser);
-      return;
-    }
 
-    // If fast auth check suggests user is authenticated, give Firebase more time
-    const timeoutDuration = isLikelyAuthenticated ? 1000 : 200;
-    
-    const timeoutId = setTimeout(() => {
-      if (initialLoad && !auth.currentUser) {
-        startTransition(() => {
-          setLoading(false);
-          setInitialLoad(false);
-        });
-      }
-    }, timeoutDuration);
-
-    // Set up auth state listener
-    const unsubscribe = onAuthStateChanged(auth, async (newUser) => {
-      // Clear the timeout since we got a response
-      clearTimeout(timeoutId);
-      
-      if (newUser) {
-        // ========== WHITELIST CHECK ON EVERY AUTH STATE CHANGE ==========
-        await verifyUserAccess(newUser);
+    // Session cookie is httpOnly (not readable in JS). Always validate with the server.
+    let cancelled = false;
+    fetchSession().then(sessionUser => {
+      if (cancelled) return;
+      if (sessionUser) {
+        setAuthenticatedUser(sessionUser);
       } else {
-        // User signed out - clear all cookies
-        clearFastAuthCookie();
-        clearAccessDeniedCookie();
         startTransition(() => {
-          if (user) {
-            clearUserData(user.uid);
-          }
-          setUser(null);
-          setIsAllowed(true);
-          setAccessDeniedReason('');
           setLoading(false);
-          setInitialLoad(false);
         });
       }
     });
 
-    return () => {
-      unsubscribe();
-      clearTimeout(timeoutId);
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [fetchSession, setAuthenticatedUser]);
 
-  const logout = async () => {
+  // ---------- Reload user (after profile update) ----------
+
+  const forceReloadUser = useCallback(async () => {
+    const sessionUser = await fetchSession();
+    if (sessionUser) {
+      startTransition(() => {
+        setUser(sessionUser);
+      });
+    }
+  }, [fetchSession]);
+
+  // ---------- Logout ----------
+
+  const logout = useCallback(async () => {
     try {
       if (user) {
-        clearUserData(user.uid);
+        clearUserData(user.id);
       }
-      
-      // Clear authentication cookies
-      clearFastAuthCookie();
-      clearAccessDeniedCookie(); // Clear access-denied cookie on logout
-      
-      await auth.signOut();
-      setUser(null); // Explicitly set user to null
-      
-      // Clear only session data, not auth persistence data
+
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+
+      startTransition(() => {
+        setUser(null);
+        setIsAllowed(true);
+        setAccessDeniedReason('');
+      });
+
       secureSessionStorage.clear();
-      
-      // Fire event to tell contexts to clear their state
       window.dispatchEvent(new CustomEvent('user-logged-out'));
-      
-      // Trigger loading animation for navigation
+
       window.dispatchEvent(new CustomEvent('routeChangeStart'));
       startTransition(() => {
         router.push('/login');
@@ -204,87 +175,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setTimeout(() => {
         window.dispatchEvent(new CustomEvent('routeChangeComplete'));
       }, 100);
-    } catch (error) {
-      // Silently handle sign out errors
+    } catch {
+      // Silently handle sign-out errors
     }
-  };
+  }, [user, router]);
 
-  // Function to sync Google profile photo to Supabase
-  const syncGoogleProfilePhoto = async (user: User) => {
-    if (user.photoURL && user.providerData.some(provider => provider.providerId === 'google.com')) {
-      try {
-        // Only sync if the photo URL is from Google (starts with https://lh3.googleusercontent.com)
-        if (user.photoURL.includes('googleusercontent.com')) {
-          const supabasePhotoUrl = await uploadProfilePhotoFromURL(user.uid, user.photoURL);
-          
-          // You could store this URL in the user's profile or update Firebase Auth
-          // For now, we'll let the profile page handle the display logic
-        }
-      } catch (error) {
-        // Non-blocking error - user can still continue
-      }
-    }
-  };
+  // ---------- Google Sign-In ----------
 
-  const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    
-    // Add additional scopes for better user profile data
-    provider.addScope('profile');
-    provider.addScope('email');
-    
-    // Set custom parameters for better UX
-    provider.setCustomParameters({
-      prompt: 'select_account'
-    });
-    
+  const signInWithGoogle = useCallback(async () => {
     try {
-      const result = await signInWithPopup(auth, provider);
-      
-      // Set cookie immediately for faster middleware recognition
-      setFastAuthCookie(result.user.uid);
-      
-      // Load user data immediately after successful authentication
-      try {
-        await createUserProfile(result.user);
-        // Check if data is in local storage first, then fallback to server
-        const localData = getUserData(result.user.uid);
-        if (!localData || Object.keys(localData).length === 0) {
-          // No local data, fetch from server
-          const dbData = await loadData(result.user.uid);
-          if (dbData && Object.keys(dbData).length > 0) {
-            saveUserData(result.user.uid, dbData);
-          }
-        }
-        // Fire event to notify components that user data is ready
-        window.dispatchEvent(new CustomEvent('user-data-loaded', { detail: { userId: result.user.uid } }));
-      } catch (dataError) {
-        // Continue with redirect even if data loading fails
+      const returnTo = getReturnUrl();
+      const res = await fetch(`/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`, { credentials: 'include' });
+      if (!res.ok) {
+        toast.error('Failed to initiate Google sign-in');
+        return;
       }
-      
-      // Sync Google profile photo to Supabase in the background
-      if (result.user.photoURL) {
-        syncGoogleProfilePhoto(result.user).catch(() => {});
-      }
-      
-      toast.success('Signed in successfully!');
-      
-      // Note: Redirect is handled by the calling page (login/signup)
-      // to avoid race conditions with middleware and auth state changes
-      
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      
-      // Handle specific error cases
-      if (error.code === 'auth/popup-closed-by-user') {
-        toast.error('Sign-in was cancelled.');
-      } else if (error.code === 'auth/popup-blocked') {
-        toast.error('Pop-up was blocked. Please allow pop-ups and try again.');
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
       } else {
-        toast.error('Failed to sign in with Google. Please try again.');
+        toast.error('Google sign-in not configured');
       }
+    } catch {
+      toast.error('Failed to sign in with Google. Please try again.');
     }
-  };
+  }, [getReturnUrl]);
+
+  // ---------- Listen for auth-success events (from login/signup pages) ----------
+
+  useEffect(() => {
+    const handleAuthSuccess = async (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.user) {
+        const appUser = mapUser(detail.user);
+        setAuthenticatedUser(appUser);
+      } else {
+        const sessionUser = await fetchSession();
+        if (sessionUser) {
+          setAuthenticatedUser(sessionUser);
+        }
+      }
+    };
+
+    window.addEventListener('auth-success', handleAuthSuccess);
+    return () => window.removeEventListener('auth-success', handleAuthSuccess);
+  }, [fetchSession, setAuthenticatedUser]);
 
   return (
     <AuthContext.Provider value={{ user, loading, logout, signInWithGoogle, forceReloadUser, isAllowed, accessDeniedReason }}>

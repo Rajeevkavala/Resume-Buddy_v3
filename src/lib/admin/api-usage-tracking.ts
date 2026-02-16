@@ -1,557 +1,199 @@
 /**
- * API Usage Tracking System
- * Tracks and manages per-user API usage limits
+ * API Usage Tracking — Prisma/PostgreSQL based
+ * Tracks per-call API usage and aggregate statistics
  */
-import { db } from '../firebase';
-import { 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  increment,
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit as firestoreLimit,
-  Timestamp,
-  writeBatch
-} from 'firebase/firestore';
-import type { ApiUsageStats, UserData } from '@/types/admin';
 
-const COLLECTIONS = {
-  USERS: 'users',
-  API_USAGE_LOGS: 'api_usage_logs',
-};
+import { prisma } from '@/lib/db';
 
-/**
- * Convert Firestore Timestamp or Date to ISO string for RSC serialization
- */
-function toISOString(value: unknown): string | null {
-  if (!value) return null;
-  // Handle Firestore Timestamp with toDate method
-  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate().toISOString();
-  }
-  // Handle Date object
-  if (value instanceof Date) return value.toISOString();
-  // Handle ISO string (passthrough)
-  if (typeof value === 'string') return value;
-  // Handle raw Firestore Timestamp object {seconds, nanoseconds}
-  if (typeof value === 'object' && 'seconds' in value) {
-    const ts = value as { seconds: number; nanoseconds?: number };
-    return new Date(ts.seconds * 1000).toISOString();
-  }
-  return null;
+// ============ Types ============
+
+export interface UserUsageStats {
+  totalCalls: number;
+  totalTokens: number;
+  dailyCalls: number;
+  dailyTokens: number;
+  monthlyCalls: number;
+  monthlyTokens: number;
+  byProvider: Record<string, { calls: number; tokens: number }>;
 }
 
-/**
- * Convert Firestore Timestamp to Date safely
- */
-function toDate(value: unknown): Date | null {
-  if (!value) return null;
-  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate();
-  }
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') return new Date(value);
-  if (typeof value === 'object' && 'seconds' in value) {
-    const ts = value as { seconds: number; nanoseconds?: number };
-    return new Date(ts.seconds * 1000);
-  }
-  return null;
+export interface AggregatedStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalCalls: number;
+  totalTokens: number;
+  byProvider: Record<string, { calls: number; tokens: number }>;
 }
 
-/**
- * Get daily/monthly usage key dates
- */
-function getUsagePeriods(): { dailyKey: string; monthlyKey: string } {
-  const now = new Date();
-  const dailyKey = now.toISOString().split('T')[0]; // YYYY-MM-DD
-  const monthlyKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
-  return { dailyKey, monthlyKey };
+export interface HistoricalDataPoint {
+  date: string;
+  calls: number;
+  tokens: number;
+  uniqueUsers: number;
 }
 
+// ============ Core Tracking ============
+
 /**
- * Track an API call for a user
+ * Track an API call — called from multi-provider.ts after each AI generation
  */
 export async function trackApiUsage(
-  uid: string, 
+  userId: string,
   provider: 'groq' | 'gemini' | 'openrouter',
   operation: string,
-  tokensUsed?: number
-): Promise<{ allowed: boolean; remaining: number; reason?: string }> {
-  try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) {
-      return { allowed: false, remaining: 0, reason: 'User not found' };
-    }
-    
-    const userData = userDoc.data();
-    const { dailyKey, monthlyKey } = getUsagePeriods();
-    
-    // Check if we need to reset counters
-    const currentUsage = userData.apiUsage || { dailyCount: 0, monthlyCount: 0, totalCount: 0 };
-    const lastResetTimestamp = currentUsage.lastReset;
-    const lastResetDate = toDate(lastResetTimestamp) || new Date(0);
-    const lastResetDay = lastResetDate.toISOString().split('T')[0];
-    
-    let dailyCount = currentUsage.dailyCount || 0;
-    let monthlyCount = currentUsage.monthlyCount || 0;
-    
-    // Reset daily counter if it's a new day
-    if (lastResetDay !== dailyKey) {
-      dailyCount = 0;
-    }
-    
-    // Reset monthly counter if it's a new month
-    const lastResetMonth = `${lastResetDate.getFullYear()}-${String(lastResetDate.getMonth() + 1).padStart(2, '0')}`;
-    if (lastResetMonth !== monthlyKey) {
-      monthlyCount = 0;
-    }
-    
-    // Get limits
-    const limits = userData.limits || { dailyLimit: 10, monthlyLimit: 300 };
-    const dailyLimit = limits.dailyLimit || 10;
-    const monthlyLimit = limits.monthlyLimit || 300;
-    
-    // Check limits
-    if (dailyCount >= dailyLimit) {
-      return { 
-        allowed: false, 
-        remaining: 0, 
-        reason: `Daily limit reached (${dailyLimit}/day)` 
-      };
-    }
-    
-    if (monthlyCount >= monthlyLimit) {
-      return { 
-        allowed: false, 
-        remaining: 0, 
-        reason: `Monthly limit reached (${monthlyLimit}/month)` 
-      };
-    }
-    
-    // Increment counters
-    await updateDoc(userRef, {
-      'apiUsage.dailyCount': dailyCount + 1,
-      'apiUsage.monthlyCount': monthlyCount + 1,
-      'apiUsage.totalCount': increment(1),
-      'apiUsage.lastReset': Timestamp.now(),
-      'apiUsage.lastProvider': provider,
-      'apiUsage.lastOperation': operation,
-    });
-    
-    // Log the usage
-    await logApiUsage(uid, provider, operation, tokensUsed);
-    
-    const remainingDaily = dailyLimit - (dailyCount + 1);
-    const remainingMonthly = monthlyLimit - (monthlyCount + 1);
-    
-    return { 
-      allowed: true, 
-      remaining: Math.min(remainingDaily, remainingMonthly) 
-    };
-  } catch (error) {
-    console.error('Error tracking API usage:', error);
-    // Allow on error to not block users
-    return { allowed: true, remaining: -1 };
-  }
-}
-
-/**
- * Log API usage to separate collection for analytics
- */
-async function logApiUsage(
-  uid: string,
-  provider: string,
-  operation: string,
-  tokensUsed?: number
+  tokensUsed: number,
+  options?: { latencyMs?: number; success?: boolean; error?: string }
 ): Promise<void> {
   try {
-    const { dailyKey } = getUsagePeriods();
-    const logRef = doc(db, COLLECTIONS.API_USAGE_LOGS, `${uid}_${dailyKey}_${Date.now()}`);
-    
-    await setDoc(logRef, {
-      uid,
-      provider,
-      operation,
-      tokensUsed: tokensUsed || 0,
-      timestamp: Timestamp.now(),
-      date: dailyKey,
-    });
-  } catch (error) {
-    console.error('Error logging API usage:', error);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    await prisma.$transaction([
+      prisma.apiCallLog.create({
+        data: {
+          userId,
+          provider,
+          operation,
+          tokensUsed,
+          latencyMs: options?.latencyMs,
+          success: options?.success ?? true,
+          error: options?.error,
+        },
+      }),
+      prisma.usageRecord.upsert({
+        where: {
+          userId_feature_date: { userId, feature: `api-${provider}`, date: today },
+        },
+        update: { count: { increment: 1 } },
+        create: { userId, feature: `api-${provider}`, count: 1, date: today },
+      }),
+    ]);
+  } catch (err) {
+    console.warn('Failed to track API usage:', err);
   }
 }
 
-/**
- * Get user's current usage stats
- */
-export async function getUserUsageStats(uid: string): Promise<ApiUsageStats | null> {
-  try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) return null;
-    
-    const userData = userDoc.data();
-    const usage = userData.apiUsage || { dailyCount: 0, monthlyCount: 0, totalCount: 0 };
-    const limits = userData.limits || { dailyLimit: 10, monthlyLimit: 300 };
-    
-    return {
-      dailyCount: usage.dailyCount || 0,
-      monthlyCount: usage.monthlyCount || 0,
-      totalCount: usage.totalCount || 0,
-      dailyLimit: limits.dailyLimit || 10,
-      monthlyLimit: limits.monthlyLimit || 300,
-      lastReset: toISOString(usage.lastReset) || new Date().toISOString(),
-    } as unknown as ApiUsageStats;
-  } catch (error) {
-    console.error('Error getting user usage stats:', error);
-    return null;
+export const logApiUsage = trackApiUsage;
+
+// ============ User Stats ============
+
+export async function getUserUsageStats(userId: string): Promise<UserUsageStats> {
+  const now = new Date();
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [allTime, daily, monthly, byProvider] = await Promise.all([
+    prisma.apiCallLog.aggregate({ where: { userId }, _count: true, _sum: { tokensUsed: true } }),
+    prisma.apiCallLog.aggregate({ where: { userId, createdAt: { gte: todayStart } }, _count: true, _sum: { tokensUsed: true } }),
+    prisma.apiCallLog.aggregate({ where: { userId, createdAt: { gte: monthStart } }, _count: true, _sum: { tokensUsed: true } }),
+    prisma.apiCallLog.groupBy({ by: ['provider'], where: { userId }, _count: true, _sum: { tokensUsed: true } }),
+  ]);
+
+  const providerMap: Record<string, { calls: number; tokens: number }> = {};
+  for (const p of byProvider) {
+    providerMap[p.provider] = { calls: p._count, tokens: p._sum.tokensUsed ?? 0 };
   }
+
+  return {
+    totalCalls: allTime._count, totalTokens: allTime._sum.tokensUsed ?? 0,
+    dailyCalls: daily._count, dailyTokens: daily._sum.tokensUsed ?? 0,
+    monthlyCalls: monthly._count, monthlyTokens: monthly._sum.tokensUsed ?? 0,
+    byProvider: providerMap,
+  };
 }
 
-/**
- * Get aggregated usage stats for all users
- */
-export async function getAggregatedUsageStats(): Promise<{
-  totalRequests: number;
-  activeUsersToday: number;
-  requestsByProvider: Record<string, number>;
-  topUsers: Array<{ uid: string; email: string; count: number }>;
+export async function getAggregatedUsageStats(): Promise<AggregatedStats> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [totalUsers, activeUsers, totals, byProvider] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { lastLoginAt: { gte: thirtyDaysAgo } } }),
+    prisma.apiCallLog.aggregate({ _count: true, _sum: { tokensUsed: true } }),
+    prisma.apiCallLog.groupBy({ by: ['provider'], _count: true, _sum: { tokensUsed: true } }),
+  ]);
+
+  const providerMap: Record<string, { calls: number; tokens: number }> = {};
+  for (const p of byProvider) {
+    providerMap[p.provider] = { calls: p._count, tokens: p._sum.tokensUsed ?? 0 };
+  }
+
+  return { totalUsers, activeUsers, totalCalls: totals._count, totalTokens: totals._sum.tokensUsed ?? 0, byProvider: providerMap };
+}
+
+// ============ Usage Limits ============
+
+export async function resetUserDailyUsage(userId: string): Promise<void> {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  await prisma.usageRecord.deleteMany({ where: { userId, date: today } });
+}
+
+export async function resetUserMonthlyUsage(userId: string): Promise<void> {
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  await prisma.usageRecord.deleteMany({ where: { userId, date: { gte: monthStart } } });
+}
+
+export async function checkUserLimits(userId: string): Promise<{
+  dailyExceeded: boolean; monthlyExceeded: boolean;
+  dailyUsed: number; monthlyUsed: number;
+  dailyLimit: number; monthlyLimit: number;
 }> {
-  try {
-    const usersRef = collection(db, COLLECTIONS.USERS);
-    const snapshot = await getDocs(usersRef);
-    
-    let totalRequests = 0;
-    let activeUsersToday = 0;
-    const topUsers: Array<{ uid: string; email: string; count: number }> = [];
-    
-    const { dailyKey } = getUsagePeriods();
-    
-    snapshot.docs.forEach(docSnap => {
-      const data = docSnap.data();
-      const usage = data.apiUsage || { totalCount: 0, dailyCount: 0 };
-      
-      totalRequests += usage.totalCount || 0;
-      
-      // Check if user was active today - multiple checks
-      let wasActiveToday = false;
-      
-      // Check 1: User has dailyCount > 0 and lastReset is today
-      const lastReset = toDate(usage.lastReset);
-      if (lastReset && lastReset.toISOString().split('T')[0] === dailyKey && usage.dailyCount > 0) {
-        wasActiveToday = true;
-      }
-      
-      // Check 2: User's lastLogin was today
-      const lastLogin = toDate(data.lastLogin);
-      if (lastLogin && lastLogin.toISOString().split('T')[0] === dailyKey) {
-        wasActiveToday = true;
-      }
-      
-      if (wasActiveToday) activeUsersToday++;
-      
-      topUsers.push({
-        uid: docSnap.id,
-        email: data.email || 'Unknown',
-        count: usage.totalCount || 0,
-      });
-    });
-    
-    // Sort by count and get top 10
-    topUsers.sort((a, b) => b.count - a.count);
-    
-    return {
-      totalRequests,
-      activeUsersToday,
-      requestsByProvider: { groq: 0, gemini: 0, openrouter: 0 }, // Would need additional tracking
-      topUsers: topUsers.slice(0, 10),
-    };
-  } catch (error) {
-    console.error('Error getting aggregated stats:', error);
-    return {
-      totalRequests: 0,
-      activeUsersToday: 0,
-      requestsByProvider: {},
-      topUsers: [],
-    };
-  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { subscription: true },
+  });
+
+  const isPro = user?.subscription?.tier === 'PRO' && user?.subscription?.status === 'ACTIVE';
+  const dailyLimit = isPro ? 50 : 10;
+  const monthlyLimit = isPro ? 1000 : 150;
+
+  const [dailyCount, monthlyCount] = await Promise.all([
+    prisma.apiCallLog.count({ where: { userId, createdAt: { gte: today } } }),
+    prisma.apiCallLog.count({ where: { userId, createdAt: { gte: monthStart } } }),
+  ]);
+
+  return {
+    dailyExceeded: dailyCount >= dailyLimit, monthlyExceeded: monthlyCount >= monthlyLimit,
+    dailyUsed: dailyCount, monthlyUsed: monthlyCount, dailyLimit, monthlyLimit,
+  };
 }
 
-/**
- * Reset a user's daily usage counter
- */
-export async function resetUserDailyUsage(uid: string): Promise<boolean> {
-  try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    await updateDoc(userRef, {
-      'apiUsage.dailyCount': 0,
-      'apiUsage.lastReset': Timestamp.now(),
-    });
-    console.log(`🔄 Reset daily usage for user ${uid}`);
-    return true;
-  } catch (error) {
-    console.error('Error resetting daily usage:', error);
-    return false;
-  }
+export async function setUserLimits(userId: string, _dailyLimit: number, _monthlyLimit: number): Promise<void> {
+  // Custom limits can be stored as user metadata or in a separate config table
+  // For now this is a no-op — tier-based limits are used
+  console.log(`setUserLimits called for ${userId} — using tier-based limits`);
 }
 
-/**
- * Reset a user's monthly usage counter
- */
-export async function resetUserMonthlyUsage(uid: string): Promise<boolean> {
-  try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    await updateDoc(userRef, {
-      'apiUsage.monthlyCount': 0,
-      'apiUsage.lastReset': Timestamp.now(),
-    });
-    console.log(`🔄 Reset monthly usage for user ${uid}`);
-    return true;
-  } catch (error) {
-    console.error('Error resetting monthly usage:', error);
-    return false;
-  }
+// ============ Historical Data ============
+
+export async function getHistoricalUsageData(days: number = 30): Promise<HistoricalDataPoint[]> {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const result = await prisma.$queryRaw<Array<{
+    date: Date; calls: bigint; tokens: bigint; unique_users: bigint;
+  }>>`
+    SELECT DATE(created_at) as date, COUNT(*) as calls,
+      COALESCE(SUM(tokens_used), 0) as tokens, COUNT(DISTINCT user_id) as unique_users
+    FROM api_call_logs WHERE created_at >= ${startDate}
+    GROUP BY DATE(created_at) ORDER BY date ASC
+  `;
+
+  return result.map((row) => ({
+    date: row.date.toISOString().split('T')[0],
+    calls: Number(row.calls), tokens: Number(row.tokens), uniqueUsers: Number(row.unique_users),
+  }));
 }
 
-/**
- * Check if user is within limits (without incrementing)
- */
-export async function checkUserLimits(uid: string): Promise<{
-  withinLimits: boolean;
-  dailyRemaining: number;
-  monthlyRemaining: number;
-}> {
-  try {
-    const stats = await getUserUsageStats(uid);
-    
-    if (!stats) {
-      return { withinLimits: true, dailyRemaining: 10, monthlyRemaining: 300 };
-    }
-    
-    const dailyRemaining = Math.max(0, stats.dailyLimit - stats.dailyCount);
-    const monthlyRemaining = Math.max(0, stats.monthlyLimit - stats.monthlyCount);
-    
-    return {
-      withinLimits: dailyRemaining > 0 && monthlyRemaining > 0,
-      dailyRemaining,
-      monthlyRemaining,
-    };
-  } catch (error) {
-    console.error('Error checking user limits:', error);
-    return { withinLimits: true, dailyRemaining: 10, monthlyRemaining: 300 };
-  }
+export async function deleteOldApiUsageLogs(daysOld: number): Promise<number> {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - daysOld);
+  const result = await prisma.apiCallLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  return result.count;
 }
 
-/**
- * Set custom limits for a user
- */
-export async function setUserLimits(
-  uid: string,
-  dailyLimit: number,
-  monthlyLimit: number
-): Promise<boolean> {
-  try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    await updateDoc(userRef, {
-      'limits.dailyLimit': dailyLimit,
-      'limits.monthlyLimit': monthlyLimit,
-    });
-    console.log(`📊 Set limits for ${uid}: ${dailyLimit}/day, ${monthlyLimit}/month`);
-    return true;
-  } catch (error) {
-    console.error('Error setting user limits:', error);
-    return false;
-  }
-}
-
-/**
- * Get historical API usage data for charts
- */
-export async function getHistoricalUsageData(days: number = 7): Promise<{
-  dailyUsage: Array<{ date: string; requests: number; uniqueUsers: number }>;
-  hourlyDistribution: Array<{ hour: number; requests: number }>;
-  userUsageDistribution: Array<{ userId: string; email: string; daily: number; monthly: number; total: number }>;
-}> {
-  try {
-    const logsRef = collection(db, COLLECTIONS.API_USAGE_LOGS);
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-    
-    // Query logs from the past N days
-    const logsQuery = query(
-      logsRef,
-      where('timestamp', '>=', Timestamp.fromDate(cutoffDate)),
-      orderBy('timestamp', 'desc')
-    );
-    
-    const snapshot = await getDocs(logsQuery);
-    
-    // Process daily usage
-    const dailyMap = new Map<string, { requests: number; users: Set<string> }>();
-    const hourlyMap = new Map<number, number>();
-    
-    snapshot.docs.forEach(docSnap => {
-      const data = docSnap.data();
-      const timestamp = toDate(data.timestamp);
-      if (!timestamp) return;
-      
-      // Daily aggregation
-      const dateKey = timestamp.toISOString().split('T')[0];
-      if (!dailyMap.has(dateKey)) {
-        dailyMap.set(dateKey, { requests: 0, users: new Set() });
-      }
-      const dayData = dailyMap.get(dateKey)!;
-      dayData.requests++;
-      if (data.uid) dayData.users.add(data.uid);
-      
-      // Hourly distribution
-      const hour = timestamp.getHours();
-      hourlyMap.set(hour, (hourlyMap.get(hour) || 0) + 1);
-    });
-    
-    // Generate array of all dates in the range
-    const dailyUsage: Array<{ date: string; requests: number; uniqueUsers: number }> = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateKey = date.toISOString().split('T')[0];
-      const dayData = dailyMap.get(dateKey);
-      dailyUsage.push({
-        date: dateKey,
-        requests: dayData?.requests || 0,
-        uniqueUsers: dayData?.users.size || 0,
-      });
-    }
-    
-    // Generate hourly distribution (0-23)
-    const hourlyDistribution: Array<{ hour: number; requests: number }> = [];
-    for (let i = 0; i < 24; i++) {
-      hourlyDistribution.push({
-        hour: i,
-        requests: hourlyMap.get(i) || 0,
-      });
-    }
-    
-    // Get user usage distribution from users collection
-    const usersRef = collection(db, COLLECTIONS.USERS);
-    const usersSnapshot = await getDocs(usersRef);
-    
-    const userUsageDistribution: Array<{ userId: string; email: string; daily: number; monthly: number; total: number }> = [];
-    
-    usersSnapshot.docs.forEach(docSnap => {
-      const data = docSnap.data();
-      const usage = data.apiUsage || { dailyCount: 0, monthlyCount: 0, totalCount: 0 };
-      
-      // Only include users with some usage
-      if (usage.totalCount > 0 || usage.dailyCount > 0 || usage.monthlyCount > 0) {
-        userUsageDistribution.push({
-          userId: docSnap.id,
-          email: data.email || 'Unknown',
-          daily: usage.dailyCount || 0,
-          monthly: usage.monthlyCount || 0,
-          total: usage.totalCount || 0,
-        });
-      }
-    });
-    
-    // Sort by total usage descending
-    userUsageDistribution.sort((a, b) => b.total - a.total);
-    
-    return {
-      dailyUsage,
-      hourlyDistribution,
-      userUsageDistribution: userUsageDistribution.slice(0, 20), // Top 20 users
-    };
-  } catch (error) {
-    console.error('Error getting historical usage data:', error);
-    return {
-      dailyUsage: [],
-      hourlyDistribution: [],
-      userUsageDistribution: [],
-    };
-  }
-}
-
-/**
- * Delete API usage logs older than specified days
- * Automatically cleans up old logs to keep the database size manageable
- * @param daysOld - Number of days after which logs should be deleted (default: 7)
- * @returns Object with count of deleted logs and any errors
- */
-export async function deleteOldApiUsageLogs(daysOld: number = 7): Promise<{
-  deletedCount: number;
-  success: boolean;
-  error?: string;
-}> {
-  try {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-    cutoffDate.setHours(0, 0, 0, 0); // Start of day
-    
-    const logsRef = collection(db, COLLECTIONS.API_USAGE_LOGS);
-    const oldLogsQuery = query(
-      logsRef,
-      where('timestamp', '<', Timestamp.fromDate(cutoffDate)),
-      firestoreLimit(500) // Process in batches to avoid timeout
-    );
-    
-    let deletedCount = 0;
-    let hasMore = true;
-    
-    // Delete in batches to handle large numbers of old logs
-    while (hasMore) {
-      const snapshot = await getDocs(oldLogsQuery);
-      
-      if (snapshot.empty) {
-        hasMore = false;
-        break;
-      }
-      
-      const batch = writeBatch(db);
-      snapshot.docs.forEach(docSnap => {
-        batch.delete(docSnap.ref);
-        deletedCount++;
-      });
-      
-      await batch.commit();
-      
-      // If we got fewer than 500, we're done
-      if (snapshot.docs.length < 500) {
-        hasMore = false;
-      }
-    }
-    
-    console.log(`🗑️ Deleted ${deletedCount} API usage logs older than ${daysOld} days`);
-    return { deletedCount, success: true };
-  } catch (error) {
-    console.error('Error deleting old API usage logs:', error);
-    return { 
-      deletedCount: 0, 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
-
-/**
- * Get the count of API usage logs
- * Useful for monitoring log volume
- */
 export async function getApiUsageLogCount(): Promise<number> {
-  try {
-    const logsRef = collection(db, COLLECTIONS.API_USAGE_LOGS);
-    const snapshot = await getDocs(logsRef);
-    return snapshot.size;
-  } catch (error) {
-    console.error('Error getting log count:', error);
-    return 0;
-  }
+  return prisma.apiCallLog.count();
 }

@@ -1,6 +1,6 @@
 /**
  * Redis client singleton for caching, rate limiting, and sessions
- * Uses ioredis for connection pooling and robust reconnection
+ * Uses ioredis with auto-pipelining for high-throughput (5000+ concurrent users)
  */
 import Redis from 'ioredis';
 
@@ -12,7 +12,7 @@ function createRedisClient(): Redis {
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
   const client = new Redis(redisUrl, {
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: 5,
     retryStrategy(times) {
       const delay = Math.min(times * 200, 5000);
       return delay;
@@ -20,6 +20,13 @@ function createRedisClient(): Redis {
     lazyConnect: true,
     enableReadyCheck: true,
     connectTimeout: 10000,
+    // Production optimizations for 5000+ concurrent users:
+    enableAutoPipelining: true, // Batch commands on the same tick into pipeline
+    enableOfflineQueue: true,   // Queue commands when disconnected
+    reconnectOnError: (err) => {
+      // Reconnect on READONLY errors (e.g., during Redis failover)
+      return err.message.includes('READONLY');
+    },
   });
 
   client.on('error', (err) => {

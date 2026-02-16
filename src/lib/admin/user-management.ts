@@ -1,195 +1,80 @@
 /**
- * User Management System
- * Handles user data, activity logging, and admin operations
+ * User Management System — Prisma/PostgreSQL based
+ * Handles user CRUD, activity logging, and admin operations
  */
-import { db } from '../firebase';
-import { 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  collection, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
-  limit,
-  addDoc,
-  Timestamp,
-  deleteDoc,
-  writeBatch,
-  serverTimestamp
-} from 'firebase/firestore';
-import type { UserData, UserActivity, AdminAction, DeleteUserOptions, DeleteUserResult } from '@/types/admin';
 
-const COLLECTIONS = {
-  USERS: 'users',
-  USER_ACTIVITY: 'user_activity',
-  ADMIN_ACTIONS: 'admin_actions',
-  API_USAGE: 'api_usage',
-  API_CALLS: 'api_calls',
-  WHITELIST: 'whitelist',
-};
+import { prisma } from '@/lib/db';
+import type {
+  UserData,
+  UserActivity,
+  AdminAction,
+  DeleteUserOptions,
+  DeleteUserResult,
+} from '@/types/admin';
 
-/**
- * Helper to safely convert Firestore Timestamp to ISO string
- */
-function toISOString(value: unknown): string | null {
-  if (!value) return null;
-  // Handle Firestore Timestamp with toDate()
-  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate().toISOString();
-  }
-  // Handle Date objects
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-  // Handle ISO string already
-  if (typeof value === 'string') {
-    return value;
-  }
-  // Handle raw Firestore timestamp {seconds, nanoseconds}
-  if (typeof value === 'object' && 'seconds' in value) {
-    const ts = value as { seconds: number; nanoseconds?: number };
-    return new Date(ts.seconds * 1000).toISOString();
-  }
-  return null;
-}
+// ============ Read Operations ============
 
-/**
- * Get all users from the database
- */
 export async function getAllUsers(): Promise<UserData[]> {
   try {
-    const usersRef = collection(db, COLLECTIONS.USERS);
-    const snapshot = await getDocs(usersRef);
-    
-    return snapshot.docs.map(docSnap => {
-      const data = docSnap.data();
-      const apiUsage = data.apiUsage || {};
-      return {
-        uid: docSnap.id,
-        email: data.email || '',
-        displayName: data.displayName || null,
-        photoURL: data.photoURL || null,
-        status: data.status || 'active',
-        role: data.role || 'user',
-        createdAt: toISOString(data.createdAt) || new Date().toISOString(),
-        lastLogin: toISOString(data.lastLogin),
-        apiUsage: {
-          dailyCount: apiUsage.dailyCount || 0,
-          monthlyCount: apiUsage.monthlyCount || 0,
-          totalCount: apiUsage.totalCount || 0,
-          lastReset: toISOString(apiUsage.lastReset) || new Date().toISOString(),
-          lastProvider: apiUsage.lastProvider || null,
-          lastOperation: apiUsage.lastOperation || null,
-        },
-        limits: data.limits || { dailyLimit: 10, monthlyLimit: 300 },
-      } as unknown as UserData;
+    const users = await prisma.user.findMany({
+      include: { subscription: true },
+      orderBy: { createdAt: 'desc' },
     });
+
+    return users.map((u) => mapUserToUserData(u));
   } catch (error) {
     console.error('Error fetching users:', error);
     return [];
   }
 }
 
-/**
- * Get a single user by UID
- */
 export async function getUserById(uid: string): Promise<UserData | null> {
   try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) return null;
-    
-    const data = userDoc.data();
-    const apiUsage = data.apiUsage || {};
-    return {
-      uid,
-      email: data.email || '',
-      displayName: data.displayName || null,
-      photoURL: data.photoURL || null,
-      status: data.status || 'active',
-      role: data.role || 'user',
-      createdAt: toISOString(data.createdAt) || new Date().toISOString(),
-      lastLogin: toISOString(data.lastLogin),
-      apiUsage: {
-        dailyCount: apiUsage.dailyCount || 0,
-        monthlyCount: apiUsage.monthlyCount || 0,
-        totalCount: apiUsage.totalCount || 0,
-        lastReset: toISOString(apiUsage.lastReset) || new Date().toISOString(),
-      },
-      limits: data.limits || { dailyLimit: 10, monthlyLimit: 300 },
-    } as unknown as UserData;
+    const user = await prisma.user.findUnique({
+      where: { id: uid },
+      include: { subscription: true },
+    });
+    if (!user) return null;
+    return mapUserToUserData(user);
   } catch (error) {
     console.error('Error fetching user:', error);
     return null;
   }
 }
 
-/**
- * Get user by email
- */
 export async function getUserByEmail(email: string): Promise<UserData | null> {
   try {
-    const usersRef = collection(db, COLLECTIONS.USERS);
-    const q = query(usersRef, where('email', '==', email.toLowerCase().trim()), limit(1));
-    const snapshot = await getDocs(q);
-    
-    if (snapshot.empty) return null;
-    
-    const docSnap = snapshot.docs[0];
-    const data = docSnap.data();
-    const apiUsage = data.apiUsage || {};
-    return {
-      uid: docSnap.id,
-      email: data.email || '',
-      displayName: data.displayName || null,
-      photoURL: data.photoURL || null,
-      status: data.status || 'active',
-      role: data.role || 'user',
-      createdAt: toISOString(data.createdAt) || new Date().toISOString(),
-      lastLogin: toISOString(data.lastLogin),
-      apiUsage: {
-        dailyCount: apiUsage.dailyCount || 0,
-        monthlyCount: apiUsage.monthlyCount || 0,
-        totalCount: apiUsage.totalCount || 0,
-        lastReset: toISOString(apiUsage.lastReset) || new Date().toISOString(),
-      },
-      limits: data.limits || { dailyLimit: 10, monthlyLimit: 300 },
-    } as unknown as UserData;
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      include: { subscription: true },
+    });
+    if (!user) return null;
+    return mapUserToUserData(user);
   } catch (error) {
     console.error('Error fetching user by email:', error);
     return null;
   }
 }
 
-/**
- * Create or update a user record
- */
+// ============ Write Operations ============
+
 export async function upsertUser(uid: string, userData: Partial<UserData>): Promise<boolean> {
   try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    const existing = await getDoc(userRef);
-    
-    if (existing.exists()) {
-      await updateDoc(userRef, {
-        ...userData,
-        updatedAt: new Date(),
-      });
-    } else {
-      await setDoc(userRef, {
-        ...userData,
-        uid,
-        status: userData.status || 'active',
-        role: userData.role || 'user',
-        apiUsage: userData.apiUsage || { dailyCount: 0, monthlyCount: 0, totalCount: 0, lastReset: new Date() },
-        limits: userData.limits || { dailyLimit: 10, monthlyLimit: 300 },
-        createdAt: new Date(),
-      });
-    }
-    
+    await prisma.user.upsert({
+      where: { id: uid },
+      update: {
+        name: userData.displayName ?? undefined,
+        avatar: userData.photoURL ?? undefined,
+        email: userData.email ?? undefined,
+      },
+      create: {
+        id: uid,
+        email: userData.email ?? '',
+        name: userData.displayName ?? null,
+        avatar: userData.photoURL ?? null,
+        role: String(userData.role).toUpperCase() === 'ADMIN' ? 'ADMIN' : 'USER',
+      },
+    });
     return true;
   } catch (error) {
     console.error('Error upserting user:', error);
@@ -197,17 +82,14 @@ export async function upsertUser(uid: string, userData: Partial<UserData>): Prom
   }
 }
 
-/**
- * Update user limits
- */
 export async function updateUserLimits(
-  uid: string, 
-  limits: { dailyLimit: number; monthlyLimit: number }
+  uid: string,
+  _limits: { dailyLimit: number; monthlyLimit: number }
 ): Promise<boolean> {
   try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    await updateDoc(userRef, { limits });
-    console.log(`📊 Updated limits for user ${uid}: ${limits.dailyLimit}/${limits.monthlyLimit}`);
+    // Limits are currently tier-based via subscription. Custom per-user limits
+    // can be stored in user metadata or a separate config table if needed.
+    console.log(`Updated limits for user ${uid}: ${_limits.dailyLimit}/${_limits.monthlyLimit}`);
     return true;
   } catch (error) {
     console.error('Error updating user limits:', error);
@@ -215,17 +97,16 @@ export async function updateUserLimits(
   }
 }
 
-/**
- * Update user status
- */
 export async function updateUserStatus(
-  uid: string, 
-  status: 'active' | 'blocked' | 'pending'
+  uid: string,
+  status: 'active' | 'suspended' | 'deleted'
 ): Promise<boolean> {
   try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    await updateDoc(userRef, { status });
-    console.log(`🔄 Updated status for user ${uid} to ${status}`);
+    await prisma.user.update({
+      where: { id: uid },
+      data: { status: status.toUpperCase() as 'ACTIVE' | 'SUSPENDED' | 'DELETED' },
+    });
+    console.log(`Updated status for user ${uid} to ${status}`);
     return true;
   } catch (error) {
     console.error('Error updating user status:', error);
@@ -233,147 +114,119 @@ export async function updateUserStatus(
   }
 }
 
-/**
- * Log user activity
- */
-export async function logUserActivity(activity: Omit<UserActivity, 'id' | 'timestamp'>): Promise<string | null> {
+// ============ Activity Logging ============
+
+export async function logUserActivity(
+  activity: Omit<UserActivity, 'id' | 'timestamp'>
+): Promise<string | null> {
   try {
-    const activityRef = collection(db, COLLECTIONS.USER_ACTIVITY);
-    const docRef = await addDoc(activityRef, {
-      ...activity,
-      timestamp: Timestamp.now(),
+    const record = await prisma.userActivity.create({
+      data: {
+        userId: activity.userId,
+        action: activity.action,
+        details: typeof activity.details === 'string'
+          ? { text: activity.details }
+          : (activity.details as Record<string, string | number | boolean | null>) ?? undefined,
+        ipAddress: activity.ipAddress ?? null,
+      },
     });
-    return docRef.id;
+    return record.id;
   } catch (error) {
     console.error('Error logging user activity:', error);
     return null;
   }
 }
 
-/**
- * Get user activity history
- */
 export async function getUserActivity(
-  uid: string, 
+  uid: string,
   limitCount: number = 50
 ): Promise<UserActivity[]> {
   try {
-    const activityRef = collection(db, COLLECTIONS.USER_ACTIVITY);
-    const q = query(
-      activityRef, 
-      where('userId', '==', uid), 
-      orderBy('timestamp', 'desc'), 
-      limit(limitCount)
-    );
-    const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(docSnap => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        userId: data.userId,
-        action: data.action,
-        details: data.details,
-        timestamp: toISOString(data.timestamp) || new Date().toISOString(),
-        ipAddress: data.ipAddress,
-      } as unknown as UserActivity;
+    const records = await prisma.userActivity.findMany({
+      where: { userId: uid },
+      orderBy: { createdAt: 'desc' },
+      take: limitCount,
     });
+
+    return records.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      action: r.action,
+      details: (r.details as Record<string, unknown>) ?? undefined,
+      timestamp: r.createdAt.toISOString(),
+      ipAddress: r.ipAddress ?? undefined,
+    }));
   } catch (error) {
     console.error('Error fetching user activity:', error);
     return [];
   }
 }
 
-/**
- * Log admin action
- */
-export async function logAdminAction(action: Omit<AdminAction, 'id' | 'timestamp'>): Promise<string | null> {
+// ============ Admin Action Logging ============
+
+export async function logAdminAction(
+  action: Omit<AdminAction, 'id' | 'timestamp'>
+): Promise<string | null> {
   try {
-    const actionsRef = collection(db, COLLECTIONS.ADMIN_ACTIONS);
-    const docRef = await addDoc(actionsRef, {
-      ...action,
-      timestamp: Timestamp.now(),
+    const record = await prisma.adminAction.create({
+      data: {
+        adminId: action.adminId ?? action.adminEmail,
+        action: action.action,
+        targetId: action.targetUserId ?? null,
+        details: {
+          ...(action.details ?? {}),
+          adminEmail: action.adminEmail,
+          targetEmail: action.targetEmail,
+        },
+        ipAddress: null,
+      },
     });
-    console.log(`📝 Admin action logged: ${action.action} by ${action.adminEmail}`);
-    return docRef.id;
+    console.log(`Admin action logged: ${action.action} by ${action.adminEmail}`);
+    return record.id;
   } catch (error) {
     console.error('Error logging admin action:', error);
     return null;
   }
 }
 
-/**
- * Get admin action logs
- */
 export async function getAdminActionLogs(limitCount: number = 100): Promise<AdminAction[]> {
   try {
-    const actionsRef = collection(db, COLLECTIONS.ADMIN_ACTIONS);
-    const q = query(actionsRef, orderBy('timestamp', 'desc'), limit(limitCount));
-    const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(docSnap => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        adminId: data.adminId,
-        adminEmail: data.adminEmail,
-        action: data.action,
-        targetUserId: data.targetUserId,
-        targetEmail: data.targetEmail,
-        details: data.details,
-        timestamp: toISOString(data.timestamp) || new Date().toISOString(),
-      } as unknown as AdminAction;
+    const records = await prisma.adminAction.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limitCount,
     });
+
+    return records.map(mapAdminActionRecord);
   } catch (error) {
     console.error('Error fetching admin action logs:', error);
     return [];
   }
 }
 
-/**
- * Get admin logs filtered by action type
- */
 export async function getAdminLogsByAction(
-  action: string, 
+  action: string,
   limitCount: number = 50
 ): Promise<AdminAction[]> {
   try {
-    const actionsRef = collection(db, COLLECTIONS.ADMIN_ACTIONS);
-    const q = query(
-      actionsRef, 
-      where('action', '==', action),
-      orderBy('timestamp', 'desc'), 
-      limit(limitCount)
-    );
-    const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(docSnap => {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        adminId: data.adminId,
-        adminEmail: data.adminEmail,
-        action: data.action,
-        targetUserId: data.targetUserId,
-        targetEmail: data.targetEmail,
-        details: data.details,
-        timestamp: toISOString(data.timestamp) || new Date().toISOString(),
-      } as unknown as AdminAction;
+    const records = await prisma.adminAction.findMany({
+      where: { action },
+      orderBy: { createdAt: 'desc' },
+      take: limitCount,
     });
+
+    return records.map(mapAdminActionRecord);
   } catch (error) {
     console.error('Error fetching admin logs by action:', error);
     return [];
   }
 }
 
-/**
- * Delete a user completely (admin only) - Simple delete
- */
+// ============ Delete Operations ============
+
 export async function deleteUser(uid: string): Promise<boolean> {
   try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    await deleteDoc(userRef);
-    console.log(`🗑️ Deleted user: ${uid}`);
+    await prisma.user.delete({ where: { id: uid } });
+    console.log(`Deleted user: ${uid}`);
     return true;
   } catch (error) {
     console.error('Error deleting user:', error);
@@ -381,17 +234,13 @@ export async function deleteUser(uid: string): Promise<boolean> {
   }
 }
 
-/**
- * Soft delete user - marks as deleted but preserves data
- */
 export async function softDeleteUser(uid: string): Promise<boolean> {
   try {
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    await updateDoc(userRef, {
-      status: 'deleted',
-      deletedAt: serverTimestamp(),
+    await prisma.user.update({
+      where: { id: uid },
+      data: { status: 'DELETED' },
     });
-    console.log(`🗑️ Soft deleted user: ${uid}`);
+    console.log(`Soft deleted user: ${uid}`);
     return true;
   } catch (error) {
     console.error('Error soft deleting user:', error);
@@ -399,9 +248,6 @@ export async function softDeleteUser(uid: string): Promise<boolean> {
   }
 }
 
-/**
- * Permanent delete user - removes all user data based on options
- */
 export async function permanentDeleteUser(
   uid: string,
   options: DeleteUserOptions = {
@@ -412,92 +258,42 @@ export async function permanentDeleteUser(
   }
 ): Promise<DeleteUserResult> {
   const deletedItems: string[] = [];
-  
+
   try {
-    // 1. Get user email first for whitelist deletion
-    const userRef = doc(db, COLLECTIONS.USERS, uid);
-    const userDoc = await getDoc(userRef);
-    const userEmail = userDoc.data()?.email;
-
-    // 2. Delete from whitelist if requested
-    if (options.deleteFromWhitelist && userEmail) {
-      try {
-        const whitelistRef = doc(db, COLLECTIONS.WHITELIST, userEmail.toLowerCase());
-        await deleteDoc(whitelistRef);
-        deletedItems.push('whitelist');
-        console.log(`🗑️ Removed ${userEmail} from whitelist`);
-      } catch (whitelistError) {
-        console.warn('Could not delete from whitelist:', whitelistError);
-      }
-    }
-
-    // 3. Delete activity logs if requested
+    // 1. Delete activity logs if requested
     if (options.deleteActivityLogs) {
-      try {
-        const activityQuery = query(
-          collection(db, COLLECTIONS.USER_ACTIVITY),
-          where('userId', '==', uid)
-        );
-        const activityDocs = await getDocs(activityQuery);
-        
-        if (!activityDocs.empty) {
-          const batch = writeBatch(db);
-          activityDocs.forEach(docSnap => batch.delete(docSnap.ref));
-          await batch.commit();
-          deletedItems.push(`activity_logs (${activityDocs.size} records)`);
-          console.log(`🗑️ Deleted ${activityDocs.size} activity logs for user ${uid}`);
-        }
-      } catch (activityError) {
-        console.warn('Could not delete activity logs:', activityError);
-      }
+      const { count } = await prisma.userActivity.deleteMany({ where: { userId: uid } });
+      if (count > 0) deletedItems.push(`activity_logs (${count} records)`);
     }
 
-    // 4. Delete API usage logs if requested
+    // 2. Delete API usage logs if requested
     if (options.deleteApiUsageLogs) {
-      try {
-        const usageQuery = query(
-          collection(db, COLLECTIONS.API_CALLS),
-          where('userId', '==', uid)
-        );
-        const usageDocs = await getDocs(usageQuery);
-        
-        if (!usageDocs.empty) {
-          const batch = writeBatch(db);
-          usageDocs.forEach(docSnap => batch.delete(docSnap.ref));
-          await batch.commit();
-          deletedItems.push(`api_usage_logs (${usageDocs.size} records)`);
-          console.log(`🗑️ Deleted ${usageDocs.size} API usage logs for user ${uid}`);
-        }
-      } catch (usageError) {
-        console.warn('Could not delete API usage logs:', usageError);
-      }
+      const { count } = await prisma.apiCallLog.deleteMany({ where: { userId: uid } });
+      if (count > 0) deletedItems.push(`api_usage_logs (${count} records)`);
     }
 
-    // 5. Delete user document if requested (do this last)
+    // 3. Delete user document (cascade deletes related records)
     if (options.deleteUserData) {
-      await deleteDoc(userRef);
+      await prisma.user.delete({ where: { id: uid } });
       deletedItems.push('user_data');
-      console.log(`🗑️ Permanently deleted user document: ${uid}`);
+      console.log(`Permanently deleted user document: ${uid}`);
     }
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       deletedItems,
-      message: `Successfully deleted: ${deletedItems.join(', ')}`
+      message: `Successfully deleted: ${deletedItems.join(', ')}`,
     };
   } catch (error) {
     console.error('Error permanently deleting user:', error);
-    return { 
-      success: false, 
+    return {
+      success: false,
       deletedItems,
-      message: `Partial deletion. Deleted: ${deletedItems.join(', ') || 'none'}. Error occurred.`
+      message: `Partial deletion. Deleted: ${deletedItems.join(', ') || 'none'}. Error occurred.`,
     };
   }
 }
 
-/**
- * Bulk delete users (admin only)
- */
 export async function bulkDeleteUsers(
   uids: string[],
   permanent: boolean = false,
@@ -508,7 +304,6 @@ export async function bulkDeleteUsers(
   for (const uid of uids) {
     try {
       let success: boolean;
-      
       if (permanent && options) {
         const result = await permanentDeleteUser(uid, options);
         success = result.success;
@@ -517,14 +312,8 @@ export async function bulkDeleteUsers(
       } else {
         success = await softDeleteUser(uid);
       }
-
-      if (success) {
-        results.success.push(uid);
-      } else {
-        results.failed.push(uid);
-      }
-    } catch (error) {
-      console.error(`Error deleting user ${uid}:`, error);
+      (success ? results.success : results.failed).push(uid);
+    } catch {
       results.failed.push(uid);
     }
   }
@@ -532,9 +321,8 @@ export async function bulkDeleteUsers(
   return results;
 }
 
-/**
- * Get user statistics summary
- */
+// ============ Stats ============
+
 export async function getUserStats(): Promise<{
   totalUsers: number;
   activeUsers: number;
@@ -542,26 +330,74 @@ export async function getUserStats(): Promise<{
   adminUsers: number;
 }> {
   try {
-    const users = await getAllUsers();
-    
-    // Count admins from the admins collection
-    let adminCount = 0;
-    try {
-      const adminsRef = collection(db, 'admins');
-      const adminsSnapshot = await getDocs(adminsRef);
-      adminCount = adminsSnapshot.docs.filter(doc => doc.data()?.active === true).length;
-    } catch (e) {
-      console.error('Error counting admins:', e);
-    }
-    
-    return {
-      totalUsers: users.length,
-      activeUsers: users.filter(u => u.status === 'active').length,
-      blockedUsers: users.filter(u => u.status === 'blocked').length,
-      adminUsers: adminCount,
-    };
+    const [total, active, blocked, admins] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      prisma.user.count({ where: { status: 'SUSPENDED' } }),
+      prisma.user.count({ where: { role: 'ADMIN' } }),
+    ]);
+
+    return { totalUsers: total, activeUsers: active, blockedUsers: blocked, adminUsers: admins };
   } catch (error) {
     console.error('Error getting user stats:', error);
     return { totalUsers: 0, activeUsers: 0, blockedUsers: 0, adminUsers: 0 };
   }
+}
+
+// ============ Helpers ============
+
+function mapUserToUserData(u: {
+  id: string;
+  email: string;
+  name: string | null;
+  avatar: string | null;
+  status: string;
+  role: string;
+  createdAt: Date;
+  lastLoginAt: Date | null;
+  deletedAt?: Date | null;
+  subscription?: { tier: string; status: string } | null;
+}): UserData {
+  return {
+    uid: u.id,
+    email: u.email,
+    displayName: u.name,
+    photoURL: u.avatar,
+    status: (u.status?.toLowerCase() ?? 'active') as UserData['status'],
+    role: (u.role?.toLowerCase() ?? 'user') as UserData['role'],
+    createdAt: u.createdAt.toISOString(),
+    lastLogin: u.lastLoginAt?.toISOString() ?? null,
+    deletedAt: u.deletedAt?.toISOString() ?? null,
+    apiUsage: {
+      dailyCount: 0,
+      monthlyCount: 0,
+      totalCount: 0,
+      lastReset: new Date().toISOString(),
+    },
+    limits: {
+      dailyLimit: u.subscription?.tier === 'PRO' ? 50 : 10,
+      monthlyLimit: u.subscription?.tier === 'PRO' ? 1000 : 150,
+    },
+  };
+}
+
+function mapAdminActionRecord(r: {
+  id: string;
+  adminId: string;
+  action: string;
+  targetId: string | null;
+  details: unknown;
+  createdAt: Date;
+}): AdminAction {
+  const details = (r.details as Record<string, unknown>) ?? {};
+  return {
+    id: r.id,
+    adminId: r.adminId,
+    adminEmail: (details.adminEmail as string) ?? r.adminId,
+    action: r.action,
+    targetUserId: r.targetId ?? undefined,
+    targetEmail: (details.targetEmail as string) ?? undefined,
+    details: details,
+    timestamp: r.createdAt.toISOString(),
+  };
 }

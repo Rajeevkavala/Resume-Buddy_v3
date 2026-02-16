@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
-import { isAdmin } from '@/lib/access-control';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
 import { Loader2, Menu, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,32 +16,24 @@ export default function AdminLayout({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [isAdminUser, setIsAdminUser] = useState<boolean | null>(null);
-  const [checking, setChecking] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const isAdminUser = (user?.role || '').toUpperCase() === 'ADMIN';
+
   useEffect(() => {
-    async function checkAdmin() {
-      if (loading) return;
-      
-      if (!user?.email) {
-        router.push('/login');
-        return;
-      }
+    if (loading) return;
 
-      const adminStatus = await isAdmin(user.email);
-      setIsAdminUser(adminStatus);
-      setChecking(false);
-
-      if (!adminStatus) {
-        router.push('/dashboard');
-      }
+    if (!user?.email) {
+      router.push('/login');
+      return;
     }
 
-    checkAdmin();
+    if (!isAdminUser) {
+      router.push('/dashboard');
+    }
   }, [user, loading, router]);
 
-  if (loading || checking) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">

@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,11 +10,8 @@ import { toast } from 'sonner';
 import { Mail, Lock, Eye, EyeOff, Sparkles, ArrowRight, AlertCircle, Loader2, Smartphone } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/utils';
-import { createUserProfile, loadData } from '@/lib/firestore';
-import { getUserData, saveUserData } from '@/lib/local-storage';
-import { withSecurePasswordHandling, secureLog } from '@/lib/auth-security';
+import { secureLog } from '@/lib/auth-security';
 import { usePageTitle } from '@/hooks/use-page-title';
-import { checkEmailAccess } from '@/lib/access-control';
 import { useSearchParams } from 'next/navigation';
 import { ForgotPasswordDialog } from '@/components/forgot-password-dialog';
 import { OTPLogin } from '@/components/otp-login';
@@ -35,7 +30,7 @@ export default function LoginPage() {
   const emailRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, signInWithGoogle } = useAuth();
 
   // Get the return URL from query params
   const getReturnUrl = (): string => {
@@ -48,6 +43,13 @@ export default function LoginPage() {
 
   // Set page title
   usePageTitle('Login');
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace(getReturnUrl());
+    }
+  }, [user, authLoading, router]);
 
   // Auto-focus email input on mount
   useEffect(() => {
@@ -79,7 +81,7 @@ export default function LoginPage() {
     return '';
   };
 
-  const handleLogin = withSecurePasswordHandling(async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const emailValidationError = validateEmail(email);
@@ -93,64 +95,48 @@ export default function LoginPage() {
     setIsLoading(true);
     
     try {
-      const accessCheck = await checkEmailAccess(email);
+      secureLog('Starting secure login process', { email });
       
-      if (!accessCheck.allowed) {
-        toast.error(accessCheck.reason || 'Access denied. Please contact the administrator.');
-        setEmailError('Not authorized');
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorMessage = data.error || 'Failed to log in. Please try again.';
+        
+        if (res.status === 401) {
+          setPasswordError('Invalid email or password');
+        } else if (res.status === 403) {
+          setEmailError('Account suspended');
+        }
+        
+        toast.error(errorMessage);
         setIsLoading(false);
         return;
       }
 
-      secureLog('Starting secure login process', { email });
-      
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      try {
-        await createUserProfile(userCredential.user);
-        const localData = getUserData(userCredential.user.uid);
-        if (!localData || Object.keys(localData).length === 0) {
-          const dbData = await loadData(userCredential.user.uid);
-          if (dbData && Object.keys(dbData).length > 0) {
-            saveUserData(userCredential.user.uid, dbData);
-          }
-        }
-        window.dispatchEvent(new CustomEvent('user-data-loaded', { detail: { userId: userCredential.user.uid } }));
-      } catch {
-        // Continue with redirect even if data loading fails
-      }
+      // Notify auth context of successful login
+      window.dispatchEvent(new CustomEvent('auth-success', { detail: { user: data.user } }));
       
       secureLog('Login successful');
       setPassword('');
       toast.success('Welcome back!');
-      // Use replace to avoid adding to browser history
+      // Brief delay to let auth context process the event before navigation
+      await new Promise(resolve => setTimeout(resolve, 100));
       router.replace(getReturnUrl());
-    } catch (error: any) {
-      secureLog('Login failed', { error: error.code });
+    } catch (error: unknown) {
+      secureLog('Login failed', { error: String(error) });
       setPassword('');
-      
-      let errorMessage = 'Failed to log in. Please try again.';
-      
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email address.';
-        setEmailError('Account not found');
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Incorrect password. Please try again.';
-        setPasswordError('Incorrect password');
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address.';
-        setEmailError('Invalid email format');
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'This account has been disabled.';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later.';
-      }
-      
-      toast.error(errorMessage);
+      toast.error('Failed to log in. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  });
+  };
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -393,7 +379,7 @@ export default function LoginPage() {
 
           {/* Security footer */}
           <p className="text-[11px] text-center text-muted-foreground/70 pt-2">
-            🔒 Secured by Firebase Auth with enterprise-grade encryption
+            🔒 Secured with enterprise-grade encryption
           </p>
         </div>
       </div>

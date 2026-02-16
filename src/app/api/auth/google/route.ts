@@ -20,15 +20,31 @@ export async function GET(request: NextRequest) {
       maxAge: 600, // 10 minutes
     });
 
+    // 2b. Store returnTo URL so we can redirect after OAuth callback
+    const { searchParams } = new URL(request.url);
+    const returnTo = searchParams.get('returnTo');
+    if (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+      cookieStore.set('oauth_return_to', returnTo, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 600,
+      });
+    }
+
     // 3. Generate Google OAuth URL
     const url = getGoogleAuthUrl(state);
 
-    // 4. Redirect to Google
-    return NextResponse.redirect(url);
+    // 4. Return URL as JSON (so frontend can handle redirect)
+    // This avoids CORS issues when fetch follows a redirect to Google
+    return NextResponse.json({ url });
 
   } catch (error) {
     console.error('[Google OAuth] Error:', error);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-    return NextResponse.redirect(`${appUrl}/login?error=oauth_failed`);
+    return NextResponse.json(
+      { error: 'Failed to initiate Google sign-in' },
+      { status: 500 }
+    );
   }
 }

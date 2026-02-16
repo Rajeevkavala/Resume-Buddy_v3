@@ -169,6 +169,7 @@ export default function Dashboard() {
       qa: null,
       interview: null,
       improvements: null,
+      coverLetter: null,
     };
     
     if (jobRole) {

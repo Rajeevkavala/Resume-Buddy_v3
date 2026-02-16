@@ -1,17 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDailyUsageStatusAsync, getDailyLimitConfig, getRateLimitConfigs, resetDailyLimit } from '@/lib/rate-limiter';
+import { getSession } from '@/lib/auth';
+import { getSessionCookie } from '@/lib/auth-cookies';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify session — users can only check their own rate limit
+    const sessionId = await getSessionCookie();
+    if (!sessionId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const session = await getSession(sessionId);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
 
-    if (!userId) {
+    if (!userId || userId !== session.userId) {
       return NextResponse.json(
-        { error: 'userId is required' },
+        { error: 'userId is required and must match session' },
         { status: 400 }
       );
     }

@@ -8,6 +8,14 @@ import {
   type TokenUser,
 } from '@/lib/auth';
 import { setAuthCookies } from '@/lib/auth-cookies';
+import { resolveAvatarUrl } from '@/lib/avatar-url';
+import { enforceApiRateLimit } from '@/lib/api-rate-limiter';
+
+function isAdminEmail(email: string): boolean {
+  const normalized = email.toLowerCase().trim();
+  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map((e) => e.trim().toLowerCase()) || [];
+  return adminEmails.includes(normalized);
+}
 
 // ============ Request Schema ============
 
@@ -20,6 +28,10 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 10 attempts per 15 minutes per IP
+    const rateLimitResponse = await enforceApiRateLimit(request, 'auth-login');
+    if (rateLimitResponse) return rateLimitResponse;
+
     // 1. Parse and validate input
     const body = await request.json();
     const validated = loginSchema.safeParse(body);
@@ -69,18 +81,25 @@ export async function POST(request: NextRequest) {
       data: { lastLoginAt: new Date() },
     });
 
-    // 6. Generate token pair
+    // 6. Ensure admin role for configured admin emails
+    let effectiveRole = user.role;
+    if (isAdminEmail(user.email) && user.role !== 'ADMIN') {
+      await prisma.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } });
+      effectiveRole = 'ADMIN';
+    }
+
+    // 7. Generate token pair
     const tier = user.subscription?.tier === 'PRO' ? 'pro' : 'free';
     const tokenUser: TokenUser = {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: effectiveRole,
       tier,
     };
 
     const tokenPair = await generateTokenPair(tokenUser);
 
-    // 7. Store refresh token in DB
+    // 8. Store refresh token in DB
     await prisma.refreshToken.create({
       data: {
         token: tokenPair.refreshToken,
@@ -89,7 +108,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 8. Create Redis session
+    // 9. Create Redis session
     const userAgent = request.headers.get('user-agent') || undefined;
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
 
@@ -97,25 +116,25 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       email: user.email,
       name: user.name || undefined,
-      role: user.role,
+      role: effectiveRole,
       tier,
       avatar: user.avatar || undefined,
       userAgent,
       ipAddress,
     });
 
-    // 9. Set cookies
+    // 10. Set cookies
     await setAuthCookies(sessionId, tokenPair.refreshToken);
 
-    // 10. Return response
+    // 11. Return response
     return NextResponse.json({
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: effectiveRole,
         tier,
-        avatar: user.avatar,
+        avatar: await resolveAvatarUrl(user.avatar),
         emailVerified: user.emailVerified,
       },
       accessToken: tokenPair.accessToken,

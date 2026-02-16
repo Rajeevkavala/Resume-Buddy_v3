@@ -9,6 +9,15 @@ import {
   type TokenUser,
 } from '@/lib/auth';
 import { setAuthCookies } from '@/lib/auth-cookies';
+import { resolveAvatarUrl } from '@/lib/avatar-url';
+import { sendWelcomeEmail } from '@/lib/email-notifications';
+import { enforceApiRateLimit } from '@/lib/api-rate-limiter';
+
+function isAdminEmail(email: string): boolean {
+  const normalized = email.toLowerCase().trim();
+  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map((e) => e.trim().toLowerCase()) || [];
+  return adminEmails.includes(normalized);
+}
 
 // ============ Request Schema ============
 
@@ -22,6 +31,10 @@ const registerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 registrations per hour per IP
+    const rateLimitResponse = await enforceApiRateLimit(request, 'auth-register');
+    if (rateLimitResponse) return rateLimitResponse;
+
     // 1. Parse and validate input
     const body = await request.json();
     const validated = registerSchema.safeParse(body);
@@ -60,12 +73,13 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
 
     // 5. Create user + account + subscription in a transaction
+    const role = isAdminEmail(email) ? 'ADMIN' : 'USER';
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase(),
         name,
         passwordHash,
-        role: 'USER',
+        role,
         status: 'ACTIVE',
         emailVerified: false,
         accounts: {
@@ -121,7 +135,10 @@ export async function POST(request: NextRequest) {
     // 9. Set cookies
     await setAuthCookies(sessionId, tokenPair.refreshToken);
 
-    // 10. Return response
+    // 10. Send welcome email (non-blocking)
+    sendWelcomeEmail(user.email, user.name || 'there').catch(() => {});
+
+    // 11. Return response
     return NextResponse.json({
       user: {
         id: user.id,
@@ -129,7 +146,7 @@ export async function POST(request: NextRequest) {
         name: user.name,
         role: user.role,
         tier: tokenUser.tier,
-        avatar: user.avatar,
+        avatar: await resolveAvatarUrl(user.avatar),
         emailVerified: user.emailVerified,
       },
       accessToken: tokenPair.accessToken,

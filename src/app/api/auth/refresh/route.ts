@@ -8,6 +8,7 @@ import {
   type TokenUser,
 } from '@/lib/auth';
 import { getSessionCookie, getRefreshCookie, setAuthCookies } from '@/lib/auth-cookies';
+import { resolveAvatarUrl } from '@/lib/avatar-url';
 
 // ============ POST /api/auth/refresh ============
 
@@ -108,7 +109,7 @@ export async function POST() {
         name: user.name,
         role: user.role,
         tier,
-        avatar: user.avatar,
+        avatar: await resolveAvatarUrl(user.avatar),
         emailVerified: user.emailVerified,
       },
       accessToken: newTokenPair.accessToken,
