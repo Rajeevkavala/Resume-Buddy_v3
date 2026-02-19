@@ -1,0 +1,2431 @@
+{
+  "version": "2.8",
+  "children": [
+    {
+      "type": "frame",
+      "id": "yBJls",
+      "x": 1531,
+      "y": 0,
+      "name": "ResumeBuddy Dashboard - Light Mode",
+      "width": 1440,
+      "height": 900,
+      "children": [
+        {
+          "type": "frame",
+          "id": "hQ5X3",
+          "name": "Sidebar",
+          "width": 260,
+          "height": "fill_container",
+          "fill": "#FFFFFF",
+          "layout": "vertical",
+          "children": [
+            {
+              "type": "frame",
+              "id": "tln7C",
+              "name": "logoFrame",
+              "gap": 12,
+              "padding": 24,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "82vRq",
+                  "name": "logoIcon",
+                  "fill": "#4980DE",
+                  "width": 40,
+                  "height": 40
+                },
+                {
+                  "type": "text",
+                  "id": "jSBDZ",
+                  "name": "logoText",
+                  "fill": "#1E293B",
+                  "content": "ResumeBuddy",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Evuiq",
+              "name": "navItems",
+              "layout": "vertical",
+              "gap": 4,
+              "padding": [
+                8,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "wQpU1",
+                  "name": "navDash",
+                  "fill": "#E8F0FE",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "S4tWQ",
+                      "name": "navDashIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "layout-dashboard",
+                      "iconFontFamily": "lucide",
+                      "fill": "#4980DE"
+                    },
+                    {
+                      "type": "text",
+                      "id": "pQxvl",
+                      "name": "navDashText",
+                      "fill": "#4980DE",
+                      "content": "Dashboard",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xOwjR",
+                  "name": "navAnalysis",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "L1CiN",
+                      "name": "navAnalysisIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "search",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ebaYm",
+                      "name": "navAnalysisText",
+                      "fill": "#64748B",
+                      "content": "Analysis",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "PBjlC",
+                  "name": "navImprove",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "wLlJP",
+                      "name": "navImproveIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "trending-up",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "cx4Go",
+                      "name": "navImproveText",
+                      "fill": "#64748B",
+                      "content": "Improvement",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "DPdtu",
+                  "name": "navQA",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "SxoDg",
+                      "name": "navQAIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "message-circle",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZNTlo",
+                      "name": "navQAText",
+                      "fill": "#64748B",
+                      "content": "Q&A",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "iqpJO",
+                  "name": "navInterview",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "Y2v0e",
+                      "name": "navInterviewIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "video",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "EPu8v",
+                      "name": "navInterviewText",
+                      "fill": "#64748B",
+                      "content": "Interview",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "r8zoO",
+                  "name": "navCreate",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "wTHSK",
+                      "name": "navCreateIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "file-plus",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "P4sPQ",
+                      "name": "navCreateText",
+                      "fill": "#64748B",
+                      "content": "Create Resume",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "W5kL3",
+                  "name": "navLibrary",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "NMBq4",
+                      "name": "navLibraryIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "folder",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "JQ1my",
+                      "name": "navLibraryText",
+                      "fill": "#64748B",
+                      "content": "Resume Library",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "rEtkD",
+                  "name": "navCover",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "x4Yca",
+                      "name": "navCoverIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "mail",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "gwaeK",
+                      "name": "navCoverText",
+                      "fill": "#64748B",
+                      "content": "Cover Letter",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "NTS2h",
+                  "name": "navBilling",
+                  "cornerRadius": 8,
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "SRv3m",
+                      "name": "navBillingIcon",
+                      "width": 20,
+                      "height": 20,
+                      "iconFontName": "credit-card",
+                      "iconFontFamily": "lucide",
+                      "fill": "#64748B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "eYkB1",
+                      "name": "navBillingText",
+                      "fill": "#64748B",
+                      "content": "Billing",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Kfgcl",
+      "x": 0,
+      "y": 0,
+      "name": "Resume Reddy Landing Page",
+      "width": 1440,
+      "fill": "#F6F4EE",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "Z9GdJ",
+          "name": "Header",
+          "width": "fill_container",
+          "gap": 24,
+          "padding": [
+            24,
+            80
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "IiQMh",
+              "name": "brand",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Ie9O0",
+                  "name": "badge",
+                  "width": 44,
+                  "height": 44,
+                  "fill": "#F15A24",
+                  "cornerRadius": 10,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "38OOF",
+                      "name": "badgeTxt",
+                      "fill": "#FFFFFF",
+                      "content": "RR",
+                      "fontFamily": "Manrope",
+                      "fontSize": 18,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "XZJWs",
+                  "name": "brandTxt",
+                  "fill": "#111111",
+                  "content": "Resume Reddy",
+                  "fontFamily": "Cormorant Garamond",
+                  "fontSize": 34,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iBRZw",
+              "name": "nav",
+              "gap": 28,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "xXI6E",
+                  "name": "nav1",
+                  "fill": "#333333",
+                  "content": "How it Works",
+                  "fontFamily": "Manrope",
+                  "fontSize": 14,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "Rhpou",
+                  "name": "nav2",
+                  "fill": "#333333",
+                  "content": "Templates",
+                  "fontFamily": "Manrope",
+                  "fontSize": 14,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "8HnP4",
+                  "name": "nav3",
+                  "fill": "#333333",
+                  "content": "Pricing",
+                  "fontFamily": "Manrope",
+                  "fontSize": 14,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "ewXrs",
+                  "name": "nav4",
+                  "fill": "#333333",
+                  "content": "Reviews",
+                  "fontFamily": "Manrope",
+                  "fontSize": 14,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "GBqr6",
+              "name": "headActions",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "iFAmn",
+                  "name": "login",
+                  "cornerRadius": 10,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#D8D8D8"
+                  },
+                  "padding": [
+                    10,
+                    14
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xqtj7",
+                      "name": "loginTxt",
+                      "fill": "#1A1A1A",
+                      "content": "Log In",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "XdqEP",
+                  "name": "ctaTop",
+                  "fill": "#111827",
+                  "cornerRadius": 10,
+                  "padding": [
+                    10,
+                    18
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "A7OhB",
+                      "name": "ctaTopTxt",
+                      "fill": "#F8F8F8",
+                      "content": "Build My Resume",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "9Joy2",
+          "name": "Hero",
+          "width": "fill_container",
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "rotation": 120,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "#FFF8EE",
+                "position": 0
+              },
+              {
+                "color": "#FFECDD",
+                "position": 1
+              }
+            ]
+          },
+          "gap": 56,
+          "padding": [
+            72,
+            80
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "1oXHl",
+              "name": "heroLeft",
+              "width": 640,
+              "layout": "vertical",
+              "gap": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aAM6G",
+                  "name": "badgeHero",
+                  "fill": "#FFF1E7",
+                  "cornerRadius": 999,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#F7C7A8"
+                  },
+                  "gap": 8,
+                  "padding": [
+                    8,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "X0XqF",
+                      "name": "badgeHeroTxt",
+                      "fill": "#9A3A13",
+                      "content": "ATS-optimized resumes in under 10 minutes",
+                      "fontFamily": "Manrope",
+                      "fontSize": 12,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "t2EL3",
+                  "name": "heroH1",
+                  "fill": "#111111",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Get Interview-Ready With a Resume That Hiring Managers Actually Read.",
+                  "lineHeight": 0.95,
+                  "fontFamily": "Cormorant Garamond",
+                  "fontSize": 68,
+                  "fontWeight": "600",
+                  "letterSpacing": -1.5
+                },
+                {
+                  "type": "text",
+                  "id": "DXqup",
+                  "name": "heroSub",
+                  "fill": "#3B3B3B",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Resume Reddy turns your experience into role-specific, ATS-friendly resumes and cover letters with expert formatting, scoring, and rewrite suggestions.",
+                  "lineHeight": 1.35,
+                  "fontFamily": "Manrope",
+                  "fontSize": 18,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Fqu4h",
+                  "name": "heroCtas",
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "SKoC1",
+                      "name": "heroPrimary",
+                      "fill": "#F15A24",
+                      "cornerRadius": 12,
+                      "padding": [
+                        14,
+                        22
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YvA3F",
+                          "name": "heroPrimaryTxt",
+                          "fill": "#FFFFFF",
+                          "content": "Start Free",
+                          "fontFamily": "Manrope",
+                          "fontSize": 16,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "1OsHd",
+                      "name": "heroSecondary",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#C9C4BC"
+                      },
+                      "padding": [
+                        14,
+                        22
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "oVVkB",
+                          "name": "heroSecondaryTxt",
+                          "fill": "#1B1B1B",
+                          "content": "See Live Demo",
+                          "fontFamily": "Manrope",
+                          "fontSize": 16,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mSsks",
+                  "name": "socialProofRow",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ZQJGB",
+                      "name": "proof1",
+                      "fill": "#2E2E2E",
+                      "content": "4.8/5 from 2,000+ users",
+                      "fontFamily": "Manrope",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "HCazp",
+                      "name": "proofDot",
+                      "fill": "#F15A24",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "e5W4z",
+                      "name": "proof2",
+                      "fill": "#4A4A4A",
+                      "content": "No design skills needed",
+                      "fontFamily": "Manrope",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RJBG9",
+              "name": "heroRight",
+              "width": 560,
+              "layout": "vertical",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "jkv4v",
+                  "name": "heroImageWrap",
+                  "metadata": {
+                    "type": "unsplash",
+                    "username": "silverkblack",
+                    "link": "https://unsplash.com/@silverkblack",
+                    "author": "Vitaly Gariev"
+                  },
+                  "clip": true,
+                  "width": "fill_container",
+                  "height": 340,
+                  "fill": {
+                    "type": "image",
+                    "enabled": true,
+                    "url": "https://images.unsplash.com/photo-1758874572608-cadad26f0352?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3NzEyNDg5Mjd8&ixlib=rb-4.1.0&q=80&w=1080",
+                    "mode": "fill"
+                  },
+                  "cornerRadius": 24
+                },
+                {
+                  "type": "frame",
+                  "id": "cJZFY",
+                  "name": "miniCard",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 18,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E8DED3"
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 18,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Ot4U3",
+                      "name": "miniTitle",
+                      "fill": "#1E1E1E",
+                      "content": "Live Resume Quality Snapshot",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "tU9gd",
+                      "name": "scoreRow",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "NNM7R",
+                          "name": "scoreText",
+                          "fill": "#525252",
+                          "content": "Resume Score",
+                          "fontFamily": "Manrope",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "qtsbg",
+                          "name": "scoreVal",
+                          "fill": "#0F172A",
+                          "content": "92%",
+                          "fontFamily": "Cormorant Garamond",
+                          "fontSize": 36,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "5Jn3f",
+                      "name": "barTrack",
+                      "width": "fill_container",
+                      "height": 10,
+                      "fill": "#F2ECE6",
+                      "cornerRadius": 999,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "oF3zN",
+                          "name": "barFill",
+                          "width": 400,
+                          "height": 10,
+                          "fill": "#F15A24",
+                          "cornerRadius": 999
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "5x3Xl",
+                      "name": "bullets",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "6RD2C",
+                          "name": "b1",
+                          "fill": "#4B5563",
+                          "content": "ATS keyword match +18%",
+                          "fontFamily": "Manrope",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "T8eVc",
+                          "name": "b2",
+                          "fill": "#4B5563",
+                          "content": "Action verbs: strong",
+                          "fontFamily": "Manrope",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "3tCIT",
+                          "name": "b3",
+                          "fill": "#4B5563",
+                          "content": "Formatting: recruiter-safe",
+                          "fontFamily": "Manrope",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "z2SoU",
+          "name": "Trust + Stats",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": [
+            56,
+            80
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "tYgu9",
+              "name": "trustHeadline",
+              "fill": "#6B7280",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Trusted by job seekers from top teams",
+              "textAlign": "center",
+              "fontFamily": "Manrope",
+              "fontSize": 14,
+              "fontWeight": "600",
+              "letterSpacing": 1
+            },
+            {
+              "type": "frame",
+              "id": "zqlso",
+              "name": "logosRow",
+              "width": "fill_container",
+              "gap": 12,
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "v20lh",
+                  "name": "logo1",
+                  "width": "fill_container",
+                  "height": 58,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "VPIFD",
+                      "name": "logo1Txt",
+                      "fill": "#243447",
+                      "content": "FINNOVA",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FH4XR",
+                  "name": "logo2",
+                  "width": "fill_container",
+                  "height": 58,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "QmF4R",
+                      "name": "logo2Txt",
+                      "fill": "#243447",
+                      "content": "NORTHSTAR",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bt6PO",
+                  "name": "logo3",
+                  "width": "fill_container",
+                  "height": 58,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "3Opy1",
+                      "name": "logo3Txt",
+                      "fill": "#243447",
+                      "content": "AURELIA",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "drwBu",
+                  "name": "logo4",
+                  "width": "fill_container",
+                  "height": 58,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "YCZwy",
+                      "name": "logo4Txt",
+                      "fill": "#243447",
+                      "content": "MEDIACORE",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IqPpu",
+              "name": "metricsRow",
+              "width": "fill_container",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "tFwpD",
+                  "name": "metricA",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 14,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "rAvZd",
+                      "name": "metricATop",
+                      "fill": "#6B7280",
+                      "content": "Resumes Created",
+                      "fontFamily": "Manrope",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "AgVT8",
+                      "name": "metricAVal",
+                      "fill": "#111827",
+                      "content": "120K+",
+                      "fontFamily": "Cormorant Garamond",
+                      "fontSize": 42,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "iefuE",
+                  "name": "metricB",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 14,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ExmVD",
+                      "name": "metricBTop",
+                      "fill": "#6B7280",
+                      "content": "Interview Callbacks",
+                      "fontFamily": "Manrope",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "rFaWa",
+                      "name": "metricBVal",
+                      "fill": "#111827",
+                      "content": "3.4x",
+                      "fontFamily": "Cormorant Garamond",
+                      "fontSize": 42,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "0yajs",
+                  "name": "metricC",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 14,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "aM2yz",
+                      "name": "metricCTop",
+                      "fill": "#6B7280",
+                      "content": "Avg. Build Time",
+                      "fontFamily": "Manrope",
+                      "fontSize": 12,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "3X7mk",
+                      "name": "metricCVal",
+                      "fill": "#111827",
+                      "content": "9 mins",
+                      "fontFamily": "Cormorant Garamond",
+                      "fontSize": 42,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "dVppj",
+          "name": "How It Works",
+          "width": "fill_container",
+          "fill": "#111827",
+          "layout": "vertical",
+          "gap": 28,
+          "padding": [
+            72,
+            80
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "Jk23C",
+              "name": "howHead",
+              "fill": "#F9FAFB",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Three steps from profile to offer-ready application",
+              "lineHeight": 0.96,
+              "fontFamily": "Cormorant Garamond",
+              "fontSize": 52,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "m3GwX",
+              "name": "stepsRow",
+              "width": "fill_container",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "S4dpN",
+                  "name": "step1",
+                  "width": "fill_container",
+                  "fill": "#1F2937",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "P5Vlr",
+                      "name": "step1Num",
+                      "width": 34,
+                      "height": 34,
+                      "fill": "#F15A24",
+                      "cornerRadius": 999,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nFEfQ",
+                          "name": "step1NumTxt",
+                          "fill": "#FFFFFF",
+                          "content": "1",
+                          "fontFamily": "Manrope",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "kohaT",
+                      "name": "step1Title",
+                      "fill": "#F9FAFB",
+                      "content": "Paste your current resume",
+                      "fontFamily": "Manrope",
+                      "fontSize": 22,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "7UX9j",
+                      "name": "step1Body",
+                      "fill": "#C7CFDB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Upload or paste your draft. Resume Reddy parses your experience and identifies missing role keywords in seconds.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "uy8Sc",
+                  "name": "step2",
+                  "width": "fill_container",
+                  "fill": "#1F2937",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "IXWPv",
+                      "name": "step2Num",
+                      "width": 34,
+                      "height": 34,
+                      "fill": "#F15A24",
+                      "cornerRadius": 999,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "JNqxY",
+                          "name": "step2NumTxt",
+                          "fill": "#FFFFFF",
+                          "content": "2",
+                          "fontFamily": "Manrope",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "5v7Ot",
+                      "name": "step2Title",
+                      "fill": "#F9FAFB",
+                      "content": "Pick your target role",
+                      "fontFamily": "Manrope",
+                      "fontSize": 22,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Knl0O",
+                      "name": "step2Body",
+                      "fill": "#C7CFDB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Choose job title, level, and industry. The builder rewrites bullets and summary for that exact hiring context.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "U0Cjd",
+                  "name": "step3",
+                  "width": "fill_container",
+                  "fill": "#1F2937",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "JFYWL",
+                      "name": "step3Num",
+                      "width": 34,
+                      "height": 34,
+                      "fill": "#F15A24",
+                      "cornerRadius": 999,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "3KAnQ",
+                          "name": "step3NumTxt",
+                          "fill": "#FFFFFF",
+                          "content": "3",
+                          "fontFamily": "Manrope",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "10e6e",
+                      "name": "step3Title",
+                      "fill": "#F9FAFB",
+                      "content": "Export and apply confidently",
+                      "fontFamily": "Manrope",
+                      "fontSize": 22,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Tzvte",
+                      "name": "step3Body",
+                      "fill": "#C7CFDB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Download ATS-safe PDF/DOCX formats and send role-specific versions faster than ever.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "XOslF",
+          "name": "Feature Highlights",
+          "width": "fill_container",
+          "fill": "#F6F4EE",
+          "layout": "vertical",
+          "gap": 40,
+          "padding": [
+            72,
+            80
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "VBo1N",
+              "name": "featHead",
+              "fill": "#141414",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Built to make your resume impossible to ignore",
+              "lineHeight": 0.96,
+              "fontFamily": "Cormorant Garamond",
+              "fontSize": 54,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "nMGWl",
+              "name": "featBlock1",
+              "width": "fill_container",
+              "gap": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Sot22",
+                  "name": "featText1",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "F1rbs",
+                      "name": "featTag1",
+                      "fill": "#9A3A13",
+                      "content": "ROLE-TUNED WRITER",
+                      "fontFamily": "Manrope",
+                      "fontSize": 12,
+                      "fontWeight": "700",
+                      "letterSpacing": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "27DUx",
+                      "name": "featTitle1",
+                      "fill": "#111827",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Generate sharper bullet points with measurable impact.",
+                      "lineHeight": 1.05,
+                      "fontFamily": "Manrope",
+                      "fontSize": 34,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "z3Q0u",
+                      "name": "featDesc1",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Turn task-based descriptions into achievement statements with clear numbers, ownership, and recruiter-friendly phrasing.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "7jlj8",
+                  "name": "featShot1",
+                  "width": 560,
+                  "height": 280,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 18,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Dgq8y",
+                      "name": "featShot1Txt",
+                      "fill": "#6B7280",
+                      "content": "Screenshot placeholder",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "cghwI",
+              "name": "featBlock2",
+              "width": "fill_container",
+              "gap": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "6fx4T",
+                  "name": "featShot2",
+                  "width": 560,
+                  "height": 280,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 18,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "SolRx",
+                      "name": "featShot2Txt",
+                      "fill": "#6B7280",
+                      "content": "Screenshot placeholder",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Yiz4W",
+                  "name": "featText2",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "o3a9G",
+                      "name": "featTag2",
+                      "fill": "#9A3A13",
+                      "content": "REAL-TIME SCORE",
+                      "fontFamily": "Manrope",
+                      "fontSize": 12,
+                      "fontWeight": "700",
+                      "letterSpacing": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "q7drd",
+                      "name": "featTitle2",
+                      "fill": "#111827",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "See exactly why your resume is getting skipped.",
+                      "lineHeight": 1.05,
+                      "fontFamily": "Manrope",
+                      "fontSize": 34,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZFp14",
+                      "name": "featDesc2",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Get line-by-line guidance on readability, keyword relevance, and structural issues before you apply.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "FHK2v",
+              "name": "featBlock3",
+              "width": "fill_container",
+              "gap": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "oubFO",
+                  "name": "featText3",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    12,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "voqjh",
+                      "name": "featTag3",
+                      "fill": "#9A3A13",
+                      "content": "SMART TEMPLATES",
+                      "fontFamily": "Manrope",
+                      "fontSize": 12,
+                      "fontWeight": "700",
+                      "letterSpacing": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "Do0TM",
+                      "name": "featTitle3",
+                      "fill": "#111827",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Switch layouts without breaking your content.",
+                      "lineHeight": 1.05,
+                      "fontFamily": "Manrope",
+                      "fontSize": 34,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "EuGNI",
+                      "name": "featDesc3",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Choose recruiter-trusted templates and preserve spacing, hierarchy, and ATS parsing quality instantly.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "6AZw5",
+                  "name": "featShot3",
+                  "width": 560,
+                  "height": 280,
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 18,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "CLHs8",
+                      "name": "featShot3Txt",
+                      "fill": "#6B7280",
+                      "content": "Screenshot placeholder",
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "7r6bP",
+          "name": "Testimonials",
+          "width": "fill_container",
+          "fill": "#111827",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": [
+            72,
+            80
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "rHLMG",
+              "name": "testiHead",
+              "fill": "#F9FAFB",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "What candidates say after switching to Resume Reddy",
+              "lineHeight": 0.96,
+              "fontFamily": "Cormorant Garamond",
+              "fontSize": 52,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "n918a",
+              "name": "testiRow",
+              "width": "fill_container",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "RWC6Q",
+                  "name": "testiCard1",
+                  "width": "fill_container",
+                  "fill": "#1F2937",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ZNOEp",
+                      "name": "testiQuote1",
+                      "fill": "#D1D5DB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "I went from zero responses to four interviews in ten days. The bullet rewrites alone were worth it.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "n0Lho",
+                      "name": "testiMeta1",
+                      "fill": "#F9FAFB",
+                      "content": "Priya R. — Product Analyst",
+                      "fontFamily": "Manrope",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Yx4Az",
+                  "name": "testiCard2",
+                  "width": "fill_container",
+                  "fill": "#1F2937",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "NjphC",
+                      "name": "testiQuote2",
+                      "fill": "#D1D5DB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "The score view told me exactly what recruiters would miss. I fixed that before sending my applications.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "4LLf7",
+                      "name": "testiMeta2",
+                      "fill": "#F9FAFB",
+                      "content": "David M. — Software Engineer",
+                      "fontFamily": "Manrope",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qcqs5",
+                  "name": "testiCard3",
+                  "width": "fill_container",
+                  "fill": "#1F2937",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lYGPh",
+                      "name": "testiQuote3",
+                      "fill": "#D1D5DB",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "I tailored my resume for each role in minutes instead of hours. It finally feels repeatable.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "2rlsV",
+                      "name": "testiMeta3",
+                      "fill": "#F9FAFB",
+                      "content": "Nina K. — Marketing Manager",
+                      "fontFamily": "Manrope",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "2UWOy",
+          "name": "Pricing",
+          "width": "fill_container",
+          "fill": "#F6F4EE",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": [
+            72,
+            80
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "W80Gq",
+              "name": "pricingHead",
+              "fill": "#111111",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Simple pricing for every stage of your career",
+              "lineHeight": 0.96,
+              "fontFamily": "Cormorant Garamond",
+              "fontSize": 52,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "pjLOY",
+              "name": "pricingSub",
+              "fill": "#4B5563",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Start free, upgrade when you need role-specific rewrites and unlimited exports.",
+              "lineHeight": 1.4,
+              "fontFamily": "Manrope",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "oS4n6",
+              "name": "pricingRow",
+              "width": "fill_container",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "8ue7h",
+                  "name": "card1",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 22,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "XMB9i",
+                      "name": "card1Name",
+                      "fill": "#111827",
+                      "content": "Free",
+                      "fontFamily": "Manrope",
+                      "fontSize": 16,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "gESpC",
+                      "name": "card1Price",
+                      "fill": "#111827",
+                      "content": "$0",
+                      "fontFamily": "Cormorant Garamond",
+                      "fontSize": 50,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Tku5k",
+                      "name": "card1Desc",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "1 resume version, basic score, and export watermark.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Z2xLR",
+                      "name": "card1Btn",
+                      "width": "fill_container",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#D4D4D4"
+                      },
+                      "padding": [
+                        12,
+                        16
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "yfHtO",
+                          "name": "card1BtnTxt",
+                          "fill": "#111827",
+                          "content": "Get Started",
+                          "fontFamily": "Manrope",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "UuVPR",
+                  "name": "card2",
+                  "width": "fill_container",
+                  "fill": "#111827",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 22,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "FLtYD",
+                      "name": "card2Name",
+                      "fill": "#F9FAFB",
+                      "content": "Pro",
+                      "fontFamily": "Manrope",
+                      "fontSize": 16,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ppdHf",
+                      "name": "card2Price",
+                      "fill": "#F9FAFB",
+                      "content": "$19/mo",
+                      "fontFamily": "Cormorant Garamond",
+                      "fontSize": 50,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "PzbPU",
+                      "name": "card2Desc",
+                      "fill": "#CBD5E1",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Unlimited role-targeted resumes, score insights, and premium templates.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "h2whU",
+                      "name": "card2Btn",
+                      "width": "fill_container",
+                      "fill": "#F15A24",
+                      "cornerRadius": 12,
+                      "padding": [
+                        12,
+                        16
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "UIrYu",
+                          "name": "card2BtnTxt",
+                          "fill": "#FFFFFF",
+                          "content": "Start Pro Trial",
+                          "fontFamily": "Manrope",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Q0Lsq",
+                  "name": "card3",
+                  "width": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E6DDD3"
+                  },
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 22,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "sSr8k",
+                      "name": "card3Name",
+                      "fill": "#111827",
+                      "content": "Teams",
+                      "fontFamily": "Manrope",
+                      "fontSize": 16,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "CVqpl",
+                      "name": "card3Price",
+                      "fill": "#111827",
+                      "content": "Custom",
+                      "fontFamily": "Cormorant Garamond",
+                      "fontSize": 50,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "8B76D",
+                      "name": "card3Desc",
+                      "fill": "#4B5563",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "For bootcamps and career centers with shared templates and analytics.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "FurJB",
+                      "name": "card3Btn",
+                      "width": "fill_container",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#D4D4D4"
+                      },
+                      "padding": [
+                        12,
+                        16
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "6Qi9T",
+                          "name": "card3BtnTxt",
+                          "fill": "#111827",
+                          "content": "Talk to Sales",
+                          "fontFamily": "Manrope",
+                          "fontSize": 14,
+                          "fontWeight": "700"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "tS5GK",
+          "name": "Final CTA",
+          "width": "fill_container",
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "rotation": 120,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "#FFE5D4",
+                "position": 0
+              },
+              {
+                "color": "#FFD2B4",
+                "position": 1
+              }
+            ]
+          },
+          "layout": "vertical",
+          "gap": 20,
+          "padding": [
+            72,
+            80
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "TquIY",
+              "name": "finalHead",
+              "fill": "#1E1B18",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Ready to land more interviews with less guesswork?",
+              "lineHeight": 0.95,
+              "textAlign": "center",
+              "fontFamily": "Cormorant Garamond",
+              "fontSize": 56,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "UM12j",
+              "name": "finalActions",
+              "width": "fill_container",
+              "gap": 12,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "5pWCG",
+                  "name": "finalBtnPrimary",
+                  "fill": "#111827",
+                  "cornerRadius": 12,
+                  "padding": [
+                    14,
+                    22
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jGB5K",
+                      "name": "finalBtnPrimaryTxt",
+                      "fill": "#FFFFFF",
+                      "content": "Build My Resume",
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "PLj6W",
+                  "name": "finalBtnSecondary",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#CBA58D"
+                  },
+                  "padding": [
+                    14,
+                    22
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EHLJG",
+                      "name": "finalBtnSecondaryTxt",
+                      "fill": "#2D1E16",
+                      "content": "View Templates",
+                      "fontFamily": "Manrope",
+                      "fontSize": 15,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "2XdLZ",
+              "name": "finalSub",
+              "fill": "#4A3B2B",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "Create your first role-specific resume today and start applying with confidence.",
+              "lineHeight": 1.35,
+              "textAlign": "center",
+              "fontFamily": "Manrope",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "lUbHk",
+          "name": "Footer",
+          "width": "fill_container",
+          "fill": "#111827",
+          "layout": "vertical",
+          "gap": 32,
+          "padding": [
+            56,
+            80
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "9KudO",
+              "name": "footTop",
+              "width": "fill_container",
+              "gap": 24,
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "8qVBe",
+                  "name": "footBrandCol",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "T1uCb",
+                      "name": "footBrandRow",
+                      "gap": 10,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "NIJok",
+                          "name": "footBadge",
+                          "width": 36,
+                          "height": 36,
+                          "fill": "#F15A24",
+                          "cornerRadius": 8,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LHpET",
+                              "name": "footBadgeTxt",
+                              "fill": "#FFFFFF",
+                              "content": "RR",
+                              "fontFamily": "Manrope",
+                              "fontSize": 14,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "LRDf8",
+                          "name": "footBrandTxt",
+                          "fill": "#F9FAFB",
+                          "content": "Resume Reddy",
+                          "fontFamily": "Cormorant Garamond",
+                          "fontSize": 32,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "5dLm3",
+                      "name": "footTagline",
+                      "fill": "#9CA3AF",
+                      "textGrowth": "fixed-width",
+                      "width": 320,
+                      "content": "Career tools for candidates who want more than generic templates.",
+                      "lineHeight": 1.35,
+                      "fontFamily": "Manrope",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "czGpv",
+                  "name": "footLinks",
+                  "gap": 48,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "H6H8f",
+                      "name": "col1",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "uDqSi",
+                          "name": "col1h",
+                          "fill": "#F9FAFB",
+                          "content": "Product",
+                          "fontFamily": "Manrope",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "BHwuB",
+                          "name": "col1a",
+                          "fill": "#9CA3AF",
+                          "content": "Resume Builder",
+                          "fontFamily": "Manrope",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "k8Djx",
+                          "name": "col1b",
+                          "fill": "#9CA3AF",
+                          "content": "Cover Letters",
+                          "fontFamily": "Manrope",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "cEBCU",
+                      "name": "col2",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BwBgj",
+                          "name": "col2h",
+                          "fill": "#F9FAFB",
+                          "content": "Company",
+                          "fontFamily": "Manrope",
+                          "fontSize": 13,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "V1iwc",
+                          "name": "col2a",
+                          "fill": "#9CA3AF",
+                          "content": "Pricing",
+                          "fontFamily": "Manrope",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "sNBff",
+                          "name": "col2b",
+                          "fill": "#9CA3AF",
+                          "content": "Support",
+                          "fontFamily": "Manrope",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "OtQyg",
+              "name": "footBottom",
+              "width": "fill_container",
+              "stroke": {
+                "thickness": {
+                  "top": 1
+                },
+                "fill": "#334155"
+              },
+              "padding": [
+                16,
+                0,
+                0,
+                0
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "oXzhJ",
+                  "name": "copy",
+                  "fill": "#94A3B8",
+                  "content": "© 2026 Resume Reddy",
+                  "fontFamily": "Manrope",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                },
+                {
+                  "type": "text",
+                  "id": "3SsUe",
+                  "name": "legal",
+                  "fill": "#94A3B8",
+                  "content": "Privacy · Terms",
+                  "fontFamily": "Manrope",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

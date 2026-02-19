@@ -40,9 +40,14 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         storedFiles: {
-          where: { objectKey: { contains: '/originals/' } },
+          where: {
+            OR: [
+              { objectKey: { contains: '/originals/' } },
+              { filename: { startsWith: 'improved-resume-' } },
+            ],
+          },
           orderBy: { createdAt: 'desc' },
-          take: 1,
+          take: 10,
         },
         generatedResumes: {
           include: { file: true },
@@ -58,13 +63,15 @@ export async function GET(request: NextRequest) {
   ]);
 
   const resumesWithOriginal = resumes.map((r) => {
-    const originalFile = r.storedFiles?.[0] ?? null;
+    const originalFile = r.storedFiles?.find((f) => f.objectKey.includes('/originals/')) ?? null;
+    const improvedFile = r.storedFiles?.find((f) => f.filename.startsWith('improved-resume-')) ?? null;
     // Keep response shape stable for existing UI consumers
     // while making the latest original upload visible.
     const { storedFiles: _storedFiles, ...rest } = r;
     return {
       ...rest,
       originalFile,
+      improvedFile,
     };
   });
 

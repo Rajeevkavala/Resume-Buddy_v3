@@ -75,18 +75,28 @@ export async function trackApiUsage(
 
 export const logApiUsage = trackApiUsage;
 
+function getStartOfTodayUTC(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function getStartOfMonthUTC(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
 // ============ User Stats ============
 
 export async function getUserUsageStats(userId: string): Promise<UserUsageStats> {
-  const now = new Date();
-  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const todayStart = getStartOfTodayUTC();
+  const monthStart = getStartOfMonthUTC();
 
-  const [allTime, daily, monthly, byProvider] = await Promise.all([
-    prisma.apiCallLog.aggregate({ where: { userId }, _count: true, _sum: { tokensUsed: true } }),
-    prisma.apiCallLog.aggregate({ where: { userId, createdAt: { gte: todayStart } }, _count: true, _sum: { tokensUsed: true } }),
-    prisma.apiCallLog.aggregate({ where: { userId, createdAt: { gte: monthStart } }, _count: true, _sum: { tokensUsed: true } }),
+  const [allTime, daily, monthly, byProvider, tokens] = await Promise.all([
+    prisma.usageRecord.aggregate({ where: { userId }, _sum: { count: true } }),
+    prisma.usageRecord.aggregate({ where: { userId, date: todayStart }, _sum: { count: true } }),
+    prisma.usageRecord.aggregate({ where: { userId, date: { gte: monthStart } }, _sum: { count: true } }),
     prisma.apiCallLog.groupBy({ by: ['provider'], where: { userId }, _count: true, _sum: { tokensUsed: true } }),
+    prisma.apiCallLog.aggregate({ where: { userId }, _sum: { tokensUsed: true } }),
   ]);
 
   const providerMap: Record<string, { calls: number; tokens: number }> = {};
@@ -95,21 +105,28 @@ export async function getUserUsageStats(userId: string): Promise<UserUsageStats>
   }
 
   return {
-    totalCalls: allTime._count, totalTokens: allTime._sum.tokensUsed ?? 0,
-    dailyCalls: daily._count, dailyTokens: daily._sum.tokensUsed ?? 0,
-    monthlyCalls: monthly._count, monthlyTokens: monthly._sum.tokensUsed ?? 0,
+    totalCalls: allTime._sum.count ?? 0,
+    totalTokens: tokens._sum.tokensUsed ?? 0,
+    dailyCalls: daily._sum.count ?? 0,
+    dailyTokens: 0,
+    monthlyCalls: monthly._sum.count ?? 0,
+    monthlyTokens: 0,
     byProvider: providerMap,
   };
 }
 
 export async function getAggregatedUsageStats(): Promise<AggregatedStats> {
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-  const [totalUsers, activeUsers, totals, byProvider] = await Promise.all([
+  const thirtyDaysAgoDate = getStartOfTodayUTC();
+  thirtyDaysAgoDate.setUTCDate(thirtyDaysAgoDate.getUTCDate() - 30);
+  const [totalUsers, activeRows, totals, byProvider, usageTotals] = await Promise.all([
     prisma.user.count(),
-    prisma.user.count({ where: { lastLoginAt: { gte: thirtyDaysAgo } } }),
+    prisma.usageRecord.groupBy({
+      by: ['userId'],
+      where: { date: { gte: thirtyDaysAgoDate } },
+    }),
     prisma.apiCallLog.aggregate({ _count: true, _sum: { tokensUsed: true } }),
     prisma.apiCallLog.groupBy({ by: ['provider'], _count: true, _sum: { tokensUsed: true } }),
+    prisma.usageRecord.aggregate({ where: { date: { gte: thirtyDaysAgoDate } }, _sum: { count: true } }),
   ]);
 
   const providerMap: Record<string, { calls: number; tokens: number }> = {};
@@ -117,18 +134,26 @@ export async function getAggregatedUsageStats(): Promise<AggregatedStats> {
     providerMap[p.provider] = { calls: p._count, tokens: p._sum.tokensUsed ?? 0 };
   }
 
-  return { totalUsers, activeUsers, totalCalls: totals._count, totalTokens: totals._sum.tokensUsed ?? 0, byProvider: providerMap };
+  const totalCalls = Math.max(totals._count, usageTotals._sum.count ?? 0);
+
+  return {
+    totalUsers,
+    activeUsers: activeRows.length,
+    totalCalls,
+    totalTokens: totals._sum.tokensUsed ?? 0,
+    byProvider: providerMap,
+  };
 }
 
 // ============ Usage Limits ============
 
 export async function resetUserDailyUsage(userId: string): Promise<void> {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = getStartOfTodayUTC();
   await prisma.usageRecord.deleteMany({ where: { userId, date: today } });
 }
 
 export async function resetUserMonthlyUsage(userId: string): Promise<void> {
-  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+  const monthStart = getStartOfMonthUTC();
   await prisma.usageRecord.deleteMany({ where: { userId, date: { gte: monthStart } } });
 }
 
@@ -169,22 +194,24 @@ export async function setUserLimits(userId: string, _dailyLimit: number, _monthl
 // ============ Historical Data ============
 
 export async function getHistoricalUsageData(days: number = 30): Promise<HistoricalDataPoint[]> {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  startDate.setHours(0, 0, 0, 0);
+  const startDate = getStartOfTodayUTC();
+  startDate.setUTCDate(startDate.getUTCDate() - days);
 
   const result = await prisma.$queryRaw<Array<{
-    date: Date; calls: bigint; tokens: bigint; unique_users: bigint;
+    date: Date; calls: bigint; unique_users: bigint;
   }>>`
-    SELECT DATE(created_at) as date, COUNT(*) as calls,
-      COALESCE(SUM(tokens_used), 0) as tokens, COUNT(DISTINCT user_id) as unique_users
-    FROM api_call_logs WHERE created_at >= ${startDate}
-    GROUP BY DATE(created_at) ORDER BY date ASC
+    SELECT date as date, COALESCE(SUM(count), 0) as calls, COUNT(DISTINCT user_id) as unique_users
+    FROM usage_records
+    WHERE date >= ${startDate}
+    GROUP BY date
+    ORDER BY date ASC
   `;
 
   return result.map((row) => ({
     date: row.date.toISOString().split('T')[0],
-    calls: Number(row.calls), tokens: Number(row.tokens), uniqueUsers: Number(row.unique_users),
+    calls: Number(row.calls),
+    tokens: 0,
+    uniqueUsers: Number(row.unique_users),
   }));
 }
 
