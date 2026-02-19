@@ -16,12 +16,68 @@ import type {
 
 export async function getAllUsers(): Promise<UserData[]> {
   try {
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
     const users = await prisma.user.findMany({
       include: { subscription: true },
       orderBy: { createdAt: 'desc' },
     });
 
-    return users.map((u) => mapUserToUserData(u));
+    const [dailyUsage, monthlyUsage, totalUsage, providerStats] = await Promise.all([
+      prisma.usageRecord.groupBy({
+        by: ['userId'],
+        where: { date: todayStart },
+        _sum: { count: true },
+      }),
+      prisma.usageRecord.groupBy({
+        by: ['userId'],
+        where: { date: { gte: monthStart } },
+        _sum: { count: true },
+      }),
+      prisma.usageRecord.groupBy({
+        by: ['userId'],
+        _sum: { count: true },
+      }),
+      prisma.apiCallLog.groupBy({
+        by: ['userId', 'provider'],
+        _count: true,
+        _sum: { tokensUsed: true },
+      }),
+    ]);
+
+    const dailyMap = new Map<string, number>(
+      dailyUsage.map((row) => [row.userId, row._sum.count ?? 0]),
+    );
+    const monthlyMap = new Map<string, number>(
+      monthlyUsage.map((row) => [row.userId, row._sum.count ?? 0]),
+    );
+    const totalMap = new Map<string, number>(
+      totalUsage.map((row) => [row.userId, row._sum.count ?? 0]),
+    );
+
+    const byProviderMap = new Map<string, NonNullable<UserData['apiUsage']>['byProvider']>();
+    for (const row of providerStats) {
+      const current = byProviderMap.get(row.userId) || {};
+      if (row.provider === 'groq' || row.provider === 'gemini' || row.provider === 'openrouter') {
+        current[row.provider] = {
+          calls: row._count,
+          tokens: row._sum.tokensUsed ?? 0,
+          cost: 0,
+        };
+      }
+      byProviderMap.set(row.userId, current);
+    }
+
+    return users.map((u) =>
+      mapUserToUserData(u, {
+        dailyCount: dailyMap.get(u.id) ?? 0,
+        monthlyCount: monthlyMap.get(u.id) ?? 0,
+        totalCount: totalMap.get(u.id) ?? 0,
+        byProvider: byProviderMap.get(u.id),
+      }),
+    );
   } catch (error) {
     console.error('Error fetching users:', error);
     return [];
@@ -357,6 +413,12 @@ function mapUserToUserData(u: {
   lastLoginAt: Date | null;
   deletedAt?: Date | null;
   subscription?: { tier: string; status: string } | null;
+},
+usage?: {
+  dailyCount?: number;
+  monthlyCount?: number;
+  totalCount?: number;
+  byProvider?: NonNullable<UserData['apiUsage']>['byProvider'];
 }): UserData {
   return {
     uid: u.id,
@@ -369,10 +431,11 @@ function mapUserToUserData(u: {
     lastLogin: u.lastLoginAt?.toISOString() ?? null,
     deletedAt: u.deletedAt?.toISOString() ?? null,
     apiUsage: {
-      dailyCount: 0,
-      monthlyCount: 0,
-      totalCount: 0,
+      dailyCount: usage?.dailyCount ?? 0,
+      monthlyCount: usage?.monthlyCount ?? 0,
+      totalCount: usage?.totalCount ?? 0,
       lastReset: new Date().toISOString(),
+      byProvider: usage?.byProvider,
     },
     limits: {
       dailyLimit: u.subscription?.tier === 'PRO' ? 50 : 10,

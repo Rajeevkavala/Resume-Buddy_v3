@@ -18,6 +18,16 @@ export async function GET(
   const resume = await prisma.resumeData.findFirst({
     where: { id, userId: auth.userId },
     include: {
+      storedFiles: {
+        where: {
+          OR: [
+            { objectKey: { contains: '/originals/' } },
+            { filename: { startsWith: 'improved-resume-' } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      },
       generatedResumes: {
         include: { file: true },
         orderBy: { createdAt: 'desc' },
@@ -44,8 +54,36 @@ export async function GET(
     }),
   );
 
+  const originalFile = resume.storedFiles.find((f) => f.objectKey.includes('/originals/')) || null;
+  const improvedFile = resume.storedFiles.find((f) => f.filename.startsWith('improved-resume-')) || null;
+
+  let originalDownloadUrl: string | null = null;
+  let improvedDownloadUrl: string | null = null;
+
+  if (originalFile?.objectKey) {
+    try {
+      originalDownloadUrl = await getPresignedDownloadUrl(originalFile.objectKey, 3600);
+    } catch {
+      originalDownloadUrl = null;
+    }
+  }
+
+  if (improvedFile?.objectKey) {
+    try {
+      improvedDownloadUrl = await getPresignedDownloadUrl(improvedFile.objectKey, 3600);
+    } catch {
+      improvedDownloadUrl = null;
+    }
+  }
+
+  const { storedFiles: _storedFiles, ...resumeWithoutStoredFiles } = resume;
+
   return NextResponse.json({
-    ...resume,
+    ...resumeWithoutStoredFiles,
+    originalFile,
+    improvedFile,
+    originalDownloadUrl,
+    improvedDownloadUrl,
     generatedResumes: generatedWithUrls,
   });
 }

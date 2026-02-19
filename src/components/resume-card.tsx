@@ -61,6 +61,13 @@ interface ResumeCardData {
     size: number;
     createdAt: string;
   } | null;
+  improvedFile?: {
+    id: string;
+    objectKey: string;
+    originalName: string;
+    size: number;
+    createdAt: string;
+  } | null;
   generatedResumes: GeneratedResume[];
 }
 
@@ -84,6 +91,7 @@ export function ResumeCard({ resume, onDelete, onArchive, onRefresh }: ResumeCar
   const hasExports = resume.generatedResumes.length > 0;
   const latestExport = resume.generatedResumes[0];
   const hasOriginal = Boolean(resume.originalFile);
+  const hasImproved = Boolean(resume.improvedFile);
   const isArchived = !resume.isActive;
 
   const getScoreColor = (score: number) => {
@@ -131,6 +139,24 @@ export function ResumeCard({ resume, onDelete, onArchive, onRefresh }: ResumeCar
     link.href = latestExport.downloadUrl;
     link.download = latestExport.file?.originalName || 'resume.pdf';
     link.click();
+  };
+
+  const handleDownloadBySource = async (source: 'original' | 'improved') => {
+    try {
+      const response = await fetch(`/api/resumes/${resume.id}/download?source=${source}`, {
+        headers: { accept: 'application/json' },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data.downloadUrl) return;
+
+      const link = document.createElement('a');
+      link.href = data.downloadUrl;
+      link.download = data.filename || `resume-${source}.txt`;
+      link.click();
+    } catch (err) {
+      console.error(`Download ${source} failed:`, err);
+    }
   };
 
   const handleArchive = async () => {
@@ -235,6 +261,18 @@ export function ResumeCard({ resume, onDelete, onArchive, onRefresh }: ResumeCar
                     Download
                   </DropdownMenuItem>
                 )}
+                {hasOriginal && (
+                  <DropdownMenuItem onClick={() => handleDownloadBySource('original')}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Original
+                  </DropdownMenuItem>
+                )}
+                {hasImproved && (
+                  <DropdownMenuItem onClick={() => handleDownloadBySource('improved')}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download Improved
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleArchive} disabled={isArchiving}>
                   {isArchived ? (
@@ -312,6 +350,28 @@ export function ResumeCard({ resume, onDelete, onArchive, onRefresh }: ResumeCar
                 >
                   <Download className="mr-1 h-3 w-3" />
                   PDF
+                </Button>
+              )}
+              {!hasExports && hasOriginal && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => handleDownloadBySource('original')}
+                >
+                  <Download className="mr-1 h-3 w-3" />
+                  Original
+                </Button>
+              )}
+              {hasImproved && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => handleDownloadBySource('improved')}
+                >
+                  <Download className="mr-1 h-3 w-3" />
+                  Improved
                 </Button>
               )}
             </div>

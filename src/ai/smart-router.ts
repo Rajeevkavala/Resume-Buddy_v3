@@ -21,6 +21,7 @@
 import { generateWithGemini } from './providers/gemini';
 import { estimateTokens } from '@/lib/prompt-optimizer';
 import { trackUsage } from '@/lib/usage-analytics';
+import { trackApiUsage } from '@/lib/admin/api-usage-tracking';
 
 // Feature types that can be routed
 export type AIFeature = 
@@ -258,6 +259,17 @@ export async function smartGenerate(options: SmartGenerateOptions): Promise<Smar
     const latencyMs = Date.now() - startTime;
     const outputTokens = estimateTokens(content);
     const estimatedCost = calculateCost(config, inputTokens, outputTokens);
+    const totalTokens = inputTokens + outputTokens;
+
+    if (userId && userId !== 'anonymous') {
+      await trackApiUsage(
+        userId,
+        config.provider,
+        feature,
+        totalTokens,
+        { latencyMs, success: true },
+      );
+    }
 
     trackSmartRouterUsage(feature, config, inputTokens, outputTokens, latencyMs, true, userId);
     console.log(`✅ ${attempt} succeeded: ${config.model} (${latencyMs}ms)`);
@@ -289,6 +301,17 @@ export async function smartGenerate(options: SmartGenerateOptions): Promise<Smar
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.warn(`⚠️ ${name} (${key}) failed: ${lastError.message}`);
+
+      if (userId && userId !== 'anonymous') {
+        const failureLatency = Date.now() - startTime;
+        await trackApiUsage(
+          userId,
+          config.provider,
+          feature,
+          inputTokens,
+          { latencyMs: failureLatency, success: false, error: lastError.message },
+        );
+      }
       
       // If not the last attempt, continue to next
       if (name !== 'Last Resort') {

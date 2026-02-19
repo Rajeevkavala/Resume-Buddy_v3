@@ -23,9 +23,14 @@ export async function GET(
     where: { id, userId: auth.userId },
     include: {
       storedFiles: {
-        where: { objectKey: { contains: '/originals/' } },
+        where: {
+          OR: [
+            { objectKey: { contains: '/originals/' } },
+            { filename: { startsWith: 'improved-resume-' } },
+          ],
+        },
         orderBy: { createdAt: 'desc' },
-        take: 1,
+        take: 10,
       },
       generatedResumes: {
         where: { status: 'COMPLETED' },
@@ -41,13 +46,15 @@ export async function GET(
   }
 
   const latestGenerated = resume.generatedResumes[0]?.file || null;
-  const latestOriginal = resume.storedFiles[0] || null;
+  const latestOriginal = resume.storedFiles.find((f) => f.objectKey.includes('/originals/')) || null;
+  const latestImproved = resume.storedFiles.find((f) => f.filename.startsWith('improved-resume-')) || null;
 
   const pickFile = () => {
     if (source === 'generated') return latestGenerated;
     if (source === 'original') return latestOriginal;
-    // auto: prefer generated, fallback to original
-    return latestGenerated || latestOriginal;
+    if (source === 'improved') return latestImproved;
+    // auto: prefer generated, then improved, then original
+    return latestGenerated || latestImproved || latestOriginal;
   };
 
   const file = pickFile();

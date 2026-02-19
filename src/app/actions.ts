@@ -32,6 +32,8 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { getJobDescriptionForRole, shouldUsePreset } from '@/lib/job-description-presets';
 import { enforceRateLimitAsync } from '@/lib/rate-limiter';
+import { prisma } from '@/lib/db';
+import { uploadFile } from '@/lib/storage';
 import { 
   assertFeatureAllowed, 
   enforceExportLimit, 
@@ -499,6 +501,61 @@ export async function runImprovementsGenerationAction(input: {
   }
   
   await saveToDb(input.userId, dataToSave);
+
+  const maybeImprovedText =
+    improvements && typeof improvements === 'object' && 'improvedResumeText' in improvements
+      ? (improvements as { improvedResumeText?: unknown }).improvedResumeText
+      : null;
+
+  if (typeof maybeImprovedText === 'string' && maybeImprovedText.trim().length > 0) {
+    try {
+      const activeResume = await prisma.resumeData.findFirst({
+        where: { userId: input.userId, isActive: true },
+        orderBy: { updatedAt: 'desc' },
+        select: { id: true },
+      });
+
+      if (activeResume) {
+        const improvedFilename = `improved-resume-${Date.now()}.txt`;
+        const improvedBuffer = Buffer.from(maybeImprovedText, 'utf-8');
+        const uploadResult = await uploadFile(
+          input.userId,
+          improvedBuffer,
+          improvedFilename,
+          'text/plain',
+          'generated',
+        );
+
+        await prisma.storedFile.deleteMany({
+          where: {
+            userId: input.userId,
+            resumeDataId: activeResume.id,
+            filename: { startsWith: 'improved-resume-' },
+          },
+        });
+
+        await prisma.storedFile.create({
+          data: {
+            userId: input.userId,
+            resumeDataId: activeResume.id,
+            filename: improvedFilename,
+            originalName: 'improved-resume.txt',
+            mimeType: 'text/plain',
+            size: improvedBuffer.length,
+            bucket: uploadResult.bucket,
+            objectKey: uploadResult.objectKey,
+            metadata: {
+              kind: 'improved-resume-text',
+              source: 'runImprovementsGenerationAction',
+            },
+          },
+        });
+      }
+    } catch (storageError) {
+      console.error('Failed to persist improved resume text file:', storageError);
+    }
+  }
+
   return improvements;
 }
 
