@@ -1,990 +1,507 @@
-# ResumeBuddy Production Deployment Guide
+# ResumeBuddy Deployment Guide (Beginner Friendly, Free-Tier First)
 
-Complete deployment guide for ResumeBuddy covering **free options** for startups/demos and **scalable paid options** for production workloads.
+This is a complete **from-scratch** deployment roadmap for beginners.
+
+It is designed around your requested architecture:
+- **Next.js app** on **Vercel**
+- **WebSocket feature** with Vercel-compatible approach (explained below)
+- **PostgreSQL** and **Redis** on free tiers
+- **LaTeX service + MinIO** on **DigitalOcean**
+- **Automation** so pushing to GitHub updates production
+
+---
+
+## Important Reality Check (Read First)
+
+### Can this be 100% free forever?
+- **No**, not with DigitalOcean long-term.
+- DigitalOcean usually gives **free credits** for a trial period. During that time, your setup can be effectively free.
+- After credits end, DigitalOcean resources are paid.
+
+### Why WebSockets on Vercel needs a note
+Vercel is great for Next.js, but persistent server WebSocket connections are not ideal on serverless functions.
+
+So for “Next + WebSocket on Vercel”, use one of these patterns:
+1. **Recommended**: Keep Next.js on Vercel + use a hosted realtime provider (Pusher/Ably free tier).
+2. Run your own WebSocket server on DigitalOcean.
+
+This guide gives options for both.
+
+---
 
 ## Table of Contents
 
-- [Deployment Architecture Overview](#deployment-architecture-overview)
-- [Cost Comparison](#cost-comparison)
-- [Part 1: Free Deployment Options](#part-1-free-deployment-options)
-  - [Option A: Vercel + Supabase (Recommended Free)](#option-a-vercel--supabase-recommended-free)
-  - [Option B: Railway (Full-Stack Free)](#option-b-railway-full-stack-free)
-  - [Option C: Render + Supabase](#option-c-render--supabase)
-- [Part 2: Scalable Paid Deployment](#part-2-scalable-paid-deployment)
-  - [Option A: DigitalOcean (Recommended)](#option-a-digitalocean-recommended)
-  - [Option B: AWS (Enterprise Scale)](#option-b-aws-enterprise-scale)
-  - [Option C: Google Cloud Platform](#option-c-google-cloud-platform)
-- [LaTeX Service Deployment](#latex-service-deployment)
-- [CI/CD Pipeline Setup](#cicd-pipeline-setup)
-- [Monitoring & Observability](#monitoring--observability)
-- [Security Checklist](#security-checklist)
-- [Backup & Disaster Recovery](#backup--disaster-recovery)
+- [Architecture You Will Build](#architecture-you-will-build)
+- [What Accounts You Need](#what-accounts-you-need)
+- [Option 1 (Recommended): Vercel + Supabase + Upstash + DigitalOcean](#option-1-recommended-vercel--supabase--upstash--digitalocean)
+- [Option 2: Same as Option 1 + Managed Realtime (Best with Vercel)](#option-2-same-as-option-1--managed-realtime-best-with-vercel)
+- [Option 3: Same as Option 1 + Self-Hosted WebSocket on DigitalOcean](#option-3-same-as-option-1--self-hosted-websocket-on-digitalocean)
+- [Full Automation (Git Push -> Live)](#full-automation-git-push---live)
+- [Beginner Troubleshooting](#beginner-troubleshooting)
+- [Go-Live Checklist](#go-live-checklist)
 
 ---
 
-## Deployment Architecture Overview
+## Architecture You Will Build
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                              PRODUCTION                                   │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  ┌────────────────┐     ┌────────────────┐     ┌────────────────────┐   │
-│  │   CDN/Edge     │────▶│   Load         │────▶│   Next.js App      │   │
-│  │ (Cloudflare)   │     │   Balancer     │     │   (Node.js)        │   │
-│  └────────────────┘     └────────────────┘     └────────────────────┘   │
-│                                                         │                │
-│         ┌───────────────────────────────────────────────┼────────┐      │
-│         │                       │                       │        │      │
-│         ▼                       ▼                       ▼        ▼      │
-│  ┌─────────────┐    ┌──────────────────┐    ┌─────────┐   ┌──────────┐ │
-│  │  JWT Auth   │    │   PostgreSQL     │    │  Redis  │   │ LaTeX    │ │
-│  │  + Sessions │    │   (Primary DB)   │    │  Cache  │   │ Service  │ │
-│  └─────────────┘    └──────────────────┘    └─────────┘   └──────────┘ │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-                    ┌──────────────────────────────┐
-                    │       AI Providers           │
-                    │  Groq → Gemini → OpenRouter  │
-                    └──────────────────────────────┘
+```text
+User Browser
+   |
+   v
+Vercel (Next.js app)
+   |-- DATABASE_URL -> Supabase PostgreSQL (free tier)
+   |-- REDIS_URL -> Upstash Redis (free tier)
+   |-- LATEX_SERVICE_URL -> DigitalOcean Droplet (LaTeX service)
+   |-- MINIO_ENDPOINT -> DigitalOcean Droplet (MinIO)
+   |
+   +-- Realtime:
+       Option 2: Pusher/Ably free tier
+       OR
+       Option 3: DigitalOcean-hosted websocket service
 ```
 
 ---
 
-## Cost Comparison
+## What Accounts You Need
 
-| Option | Monthly Cost | Users Supported | Best For |
-|--------|-------------|-----------------|----------|
-| **Vercel + Supabase** | $0 | ~1,000 | Demos, MVPs, Small projects |
-| **Railway** | $0-5 | ~500 | Full-stack prototypes |
-| **Render + Supabase** | $0-7 | ~500 | Alternative free stack |
-| **DigitalOcean** | $20-50 | 500-5,000 | Production, cost-effective |
-| **AWS** | $50-200+ | 10,000+ | Enterprise, auto-scaling |
-| **Google Cloud** | $50-150+ | 5,000+ | GCP ecosystem, Cloud Run |
+Create these accounts first:
+1. GitHub
+2. Vercel
+3. Supabase
+4. Upstash
+5. DigitalOcean
+
+Also install locally:
+- Git
+- Node.js 20+
+- Docker Desktop (optional but useful)
+- VS Code
 
 ---
 
-# Part 1: Free Deployment Options
+## Option 1 (Recommended): Vercel + Supabase + Upstash + DigitalOcean
 
-## Option A: Vercel + Supabase (Recommended Free)
+Best for beginners and lowest operational complexity.
 
-**Best for**: Quick deployments, demos, small projects (PostgreSQL + free tier auth)
-**Free limits**: 100GB bandwidth, 6,000 minutes build time/month
+## Step 1: Prepare repository on GitHub
 
-### Step 1: Prepare Repository
+From project root:
 
 ```bash
-# Ensure your code is on GitHub
+git status
+git add .
+git commit -m "prepare deployment"
 git push origin main
 ```
 
-### Step 2: Deploy to Vercel
-
-1. Go to [vercel.com](https://vercel.com) and sign up with GitHub
-2. Click **"Add New Project"**
-3. Import your GitHub repository
-4. Configure settings:
-   - **Framework Preset**: Next.js
-   - **Root Directory**: `./`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `.next`
-
-### Step 3: Add Environment Variables
-
-In Vercel Dashboard → Project → Settings → Environment Variables:
-
-```env
-# Database (Use managed PostgreSQL like Neon, Supabase, or Railway)
-DATABASE_URL=postgresql://user:pass@host:5432/dbname
-
-# Redis (Use Upstash for serverless Redis)
-REDIS_URL=rediss://default:xxx@xxx.upstash.io:6379
-
-# Authentication
-JWT_SECRET=your_production_jwt_secret_minimum_32_chars
-JWT_REFRESH_SECRET=your_production_refresh_secret_min_32_chars
-SESSION_COOKIE_NAME=rb_session
-
-# OAuth (Optional)
-GOOGLE_CLIENT_ID=xxx
-GOOGLE_CLIENT_SECRET=xxx
-
-# AI Providers
-GROQ_API_KEY=gsk_xxx
-GOOGLE_API_KEY=xxx
-OPENROUTER_API_KEY=sk-or-xxx
-
-# LaTeX Service (deploy separately or use external)
-LATEX_SERVICE_URL=https://your-latex-service.onrender.com
-
-# App URL
-NEXT_PUBLIC_APP_URL=https://your-domain.vercel.app
-NODE_ENV=production
-```
-
-### Step 4: Configure Custom Domain (Optional)
-
-1. Go to Project → Settings → Domains
-2. Add your domain
-3. Update DNS records as instructed
-
-### Step 5: Deploy LaTeX Service on Render (Free)
-
-```bash
-# In services/resume-latex-service
-# Create render.yaml
-```
-
-Create `services/resume-latex-service/render.yaml`:
-```yaml
-services:
-  - type: web
-    name: resumebuddy-latex
-    env: docker
-    dockerfilePath: ./Dockerfile
-    region: oregon
-    plan: free
-    healthCheckPath: /healthz
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 8080
-```
-
-Deploy:
-1. Go to [render.com](https://render.com)
-2. Connect GitHub
-3. Select `services/resume-latex-service` directory
-4. Choose **Docker** environment
-5. Use Free plan
-
-**Vercel Free Tier Limits**:
-- 100GB bandwidth/month
-- Serverless Function: 10s timeout (hobby)
-- Edge Functions: unlimited
-- 6,000 build minutes/month
+If this is your first push, create the GitHub repo first.
 
 ---
 
-## Option B: Railway (Full-Stack Free)
+## Step 2: Deploy Next.js on Vercel
 
-**Best for**: Full monorepo deployment with databases
-**Free credits**: $5/month free (enough for small apps)
+1. Open https://vercel.com
+2. Click **Add New Project**
+3. Import your GitHub repo (`Resume-Buddy_v3`)
+4. Framework should auto-detect as Next.js
+5. Deploy once (even before env vars)
 
-### Step 1: Create Railway Account
-
-1. Go to [railway.app](https://railway.app)
-2. Sign up with GitHub
-
-### Step 2: Deploy from GitHub
-
-```bash
-# Click "New Project" → "Deploy from GitHub repo"
-# Select your repository
-```
-
-### Step 3: Add Services
-
-In Railway dashboard, add:
-
-**PostgreSQL**:
-- Click **+ New** → **Database** → **PostgreSQL**
-- Automatically sets `DATABASE_URL`
-
-**Redis**:
-- Click **+ New** → **Database** → **Redis**
-- Automatically sets `REDIS_URL`
-
-**Next.js App**:
-- Click **+ New** → **GitHub Repo** → Select repo
-- Set root directory: `/`
-
-### Step 4: Configure Environment Variables
-
-In Railway → Your Project → Variables:
-
-```env
-# Auto-configured by Railway
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-REDIS_URL=${{Redis.REDIS_URL}}
-
-# Authentication (required)
-JWT_SECRET=your_production_jwt_secret_minimum_32_chars
-JWT_REFRESH_SECRET=your_production_refresh_secret_min_32_chars
-
-# OAuth (optional)
-GOOGLE_CLIENT_ID=xxx
-GOOGLE_CLIENT_SECRET=xxx
-
-# AI Providers
-GROQ_API_KEY=gsk_xxx
-GOOGLE_API_KEY=xxx
-OPENROUTER_API_KEY=sk-or-xxx
-
-# App config
-NEXT_PUBLIC_APP_URL=https://your-app.up.railway.app
-NODE_ENV=production
-PORT=9002
-```
-
-### Step 5: Deploy LaTeX Service
-
-Add another service:
-- Click **+ New** → **GitHub Repo**
-- Root directory: `services/resume-latex-service`
-- Railway auto-detects Dockerfile
-
-**Railway Free Limits**:
-- $5 free credits/month
-- ~500 hours of runtime
-- 512MB RAM per service
+You will get a URL like:
+`https://your-app.vercel.app`
 
 ---
 
-## Option C: Render + Supabase
+## Step 3: Create PostgreSQL (Supabase free tier)
 
-**Best for**: PostgreSQL-first applications
-**Free tier**: Generous free tiers on both platforms
+1. Open https://supabase.com
+2. Create a new project
+3. Go to **Settings -> Database**
+4. Copy connection strings
 
-### Step 1: Set Up Supabase (Database + Auth)
+Use:
+- **Pooled URL** for app runtime in Vercel
+- **Direct URL** for migrations from local machine if needed
 
-1. Go to [supabase.com](https://supabase.com)
-2. Create new project
-3. Get connection string from Settings → Database
-
-```env
-DATABASE_URL=postgresql://postgres:xxx@db.xxx.supabase.co:5432/postgres
-```
-
-### Step 2: Deploy to Render
-
-1. Go to [render.com](https://render.com)
-2. **New** → **Web Service**
-3. Connect GitHub repository
-4. Configure:
-   - **Environment**: Node
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm start`
-   - **Plan**: Free
-
-### Step 3: Add Environment Variables
-
-In Render → Environment:
-
-```env
-# Database
-DATABASE_URL=postgresql://postgres:xxx@db.xxx.supabase.co:5432/postgres
-
-# Authentication
-JWT_SECRET=your_production_jwt_secret_minimum_32_chars
-JWT_REFRESH_SECRET=your_production_refresh_secret_min_32_chars
-
-# OAuth (optional)
-GOOGLE_CLIENT_ID=xxx
-GOOGLE_CLIENT_SECRET=xxx
-
-# AI Providers
-GROQ_API_KEY=gsk_xxx
-GOOGLE_API_KEY=xxx
-OPENROUTER_API_KEY=sk-or-xxx
-
-# App config
-NEXT_PUBLIC_APP_URL=https://your-app.onrender.com
-NODE_ENV=production
-```
-
-### Step 4: Add Redis (Upstash - Free)
-
-1. Go to [upstash.com](https://upstash.com)
-2. Create Redis database (free tier: 10,000 commands/day)
-3. Add to Render environment:
-
-```env
-REDIS_URL=rediss://default:xxx@xxx.upstash.io:6379
-```
-
-**Render Free Limits**:
-- 750 hours/month
-- Spins down after 15 min inactivity
-- 512MB RAM
+Set in Vercel later as `DATABASE_URL`.
 
 ---
 
-# Part 2: Scalable Paid Deployment
+## Step 4: Create Redis (Upstash free tier)
 
-## Option A: DigitalOcean (Recommended)
+1. Open https://upstash.com
+2. Create Redis database
+3. Open your Redis DB -> **Details / Connect**
+4. Copy full `REDIS_URL`
 
-**Best for**: Cost-effective production, 500-5,000 users
-**Starting cost**: ~$20/month
+It looks like:
+`rediss://default:<password>@<host>.upstash.io:6379`
 
-### Architecture
+Use this full URL in Vercel as `REDIS_URL`.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    DigitalOcean                              │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐      ┌─────────────┐     ┌─────────────┐  │
-│  │  App        │      │  Managed    │     │  Managed    │  │
-│  │  Platform   │◀────▶│  PostgreSQL │     │  Redis      │  │
-│  │  (Next.js)  │      │  $15/mo     │     │  $15/mo     │  │
-│  └─────────────┘      └─────────────┘     └─────────────┘  │
-│         │                                                   │
-│         ▼                                                   │
-│  ┌─────────────┐      ┌─────────────┐     ┌─────────────┐  │
-│  │  Droplet    │      │  Spaces     │     │  Load       │  │
-│  │  (LaTeX)    │      │  (Storage)  │     │  Balancer   │  │
-│  │  $12/mo     │      │  $5/mo      │     │  $12/mo     │  │
-│  └─────────────┘      └─────────────┘     └─────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                         Total: ~$59/mo
-```
+---
 
-### Step 1: Create DigitalOcean Account
+## Step 5: Create DigitalOcean Droplet for LaTeX + MinIO
 
-1. Go to [digitalocean.com](https://cloud.digitalocean.com/registrations/new)
-2. Sign up and add payment method
-3. Use referral link for $200 free credit (60 days)
+1. Open https://cloud.digitalocean.com
+2. Create Droplet:
+   - Ubuntu 22.04 LTS
+   - Size: start with **1 vCPU / 2GB RAM**
+   - Region: close to your users
+3. Attach SSH key if available (recommended)
+4. Create droplet
 
-### Step 2: Install doctl CLI
+Note the public IP as `YOUR_DROPLET_IP`.
 
-```powershell
-# Windows (PowerShell Admin)
-choco install doctl
+---
 
-# Or download from:
-# https://github.com/digitalocean/doctl/releases
+## Step 6: Secure server and install Docker
 
-# Authenticate
-doctl auth init
-```
-
-### Step 3: Deploy Managed PostgreSQL
+SSH into droplet:
 
 ```bash
-# Create database cluster
-doctl databases create resumebuddy-db \
-  --engine pg \
-  --region nyc1 \
-  --size db-s-1vcpu-1gb \
-  --num-nodes 1
-
-# Get connection string
-doctl databases connection resumebuddy-db --format Host,Port,User,Password,Database
+ssh root@YOUR_DROPLET_IP
 ```
 
-### Step 4: Deploy Managed Redis
+Install Docker and Compose:
 
 ```bash
-doctl databases create resumebuddy-redis \
-  --engine redis \
-  --region nyc1 \
-  --size db-s-1vcpu-1gb \
-  --num-nodes 1
+apt update && apt upgrade -y
+apt install -y docker.io docker-compose-plugin git ufw
 ```
 
-### Step 5: Deploy Next.js via App Platform
-
-Create `app.yaml`:
-
-```yaml
-name: resumebuddy
-region: nyc
-services:
-  - name: web
-    github:
-      repo: Rajeevkavala/Resume-Buddy_v3
-      branch: main
-      deploy_on_push: true
-    dockerfile_path: infrastructure/docker/Dockerfile.web
-    http_port: 9002
-    instance_size_slug: professional-xs
-    instance_count: 2
-    health_check:
-      http_path: /api/health
-    envs:
-      - key: DATABASE_URL
-        value: ${resumebuddy-db.DATABASE_URL}
-      - key: REDIS_URL  
-        value: ${resumebuddy-redis.REDIS_URL}
-      - key: GROQ_API_KEY
-        type: SECRET
-        value: YOUR_GROQ_KEY
-      - key: GOOGLE_API_KEY
-        type: SECRET
-        value: YOUR_GOOGLE_KEY
-      - key: NODE_ENV
-        value: production
-
-databases:
-  - name: resumebuddy-db
-    engine: PG
-    production: true
-  - name: resumebuddy-redis
-    engine: REDIS
-    production: true
-```
-
-Deploy:
-```bash
-doctl apps create --spec app.yaml
-```
-
-### Step 6: Deploy LaTeX Service on Droplet
+Basic firewall:
 
 ```bash
-# Create Droplet
-doctl compute droplet create latex-service \
-  --image docker-20-04 \
-  --size s-1vcpu-2gb \
-  --region nyc1
+ufw allow OpenSSH
+ufw allow 8080/tcp   # LaTeX API
+ufw allow 9000/tcp   # MinIO API
+ufw allow 9001/tcp   # MinIO Console (later restrict to your IP)
+ufw enable
+ufw status
+```
 
-# SSH into droplet
-doctl compute ssh latex-service
+---
 
-# On the droplet:
-apt update && apt install -y docker.io docker-compose
+## Step 7: Run LaTeX + MinIO on Droplet
+
+Clone repo on server:
+
+```bash
+cd /opt
 git clone https://github.com/Rajeevkavala/Resume-Buddy_v3.git
-cd Resume-Buddy_v3/services/resume-latex-service
-docker build -t latex-service .
-docker run -d --restart=always -p 8080:8080 -m 1536m latex-service
 ```
 
-### Step 7: Configure Firewall
+Create compose file:
 
 ```bash
-# Create firewall
-doctl compute firewall create \
-  --name latex-firewall \
-  --inbound-rules "protocol:tcp,ports:22,address:0.0.0.0/0 protocol:tcp,ports:8080,address:0.0.0.0/0" \
-  --outbound-rules "protocol:tcp,ports:all,address:0.0.0.0/0"
+mkdir -p /opt/resumebuddy
+cd /opt/resumebuddy
 ```
 
-### Step 8: Set Up Domain & SSL
-
-1. Go to Networking → Domains
-2. Add your domain
-3. Point A record to your app
-4. SSL is automatic with App Platform
-
-**DigitalOcean Monthly Costs**:
-| Service | Size | Cost |
-|---------|------|------|
-| App Platform | Professional XS x2 | $24 |
-| PostgreSQL | 1 vCPU, 1GB | $15 |
-| Redis | 1 vCPU, 1GB | $15 |
-| Droplet (LaTeX) | 1 vCPU, 2GB | $12 |
-| Spaces (optional) | 250GB | $5 |
-| **Total** | | **~$71/mo** |
-
----
-
-## Option B: AWS (Enterprise Scale)
-
-**Best for**: Large scale, auto-scaling, enterprise requirements
-**Starting cost**: ~$50-200/month
-
-### Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                           AWS                                       │
-├────────────────────────────────────────────────────────────────────┤
-│                                                                    │
-│  ┌──────────┐    ┌────────────┐    ┌────────────────────────────┐ │
-│  │CloudFront│───▶│    ALB     │───▶│      ECS Fargate           │ │
-│  │  (CDN)   │    │ (L7 LB)    │    │  ┌──────────────────────┐  │ │
-│  └──────────┘    └────────────┘    │  │  Next.js Container   │  │ │
-│                                     │  │  (Auto-scaling)      │  │ │
-│                                     │  └──────────────────────┘  │ │
-│                                     │  ┌──────────────────────┐  │ │
-│                                     │  │  LaTeX Container     │  │ │
-│                                     │  └──────────────────────┘  │ │
-│                                     └────────────────────────────┘ │
-│                                               │                    │
-│         ┌─────────────────────────────────────┼────────────────┐  │
-│         │                     │               │                │  │
-│         ▼                     ▼               ▼                ▼  │
-│  ┌─────────────┐    ┌─────────────┐   ┌─────────────┐  ┌────────┐│
-│  │    RDS      │    │ElastiCache  │   │     S3      │  │Secrets ││
-│  │ PostgreSQL  │    │   Redis     │   │  Storage    │  │Manager ││
-│  └─────────────┘    └─────────────┘   └─────────────┘  └────────┘│
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-### Step 1: Install AWS CLI
-
-```powershell
-# Windows
-msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
-
-# Configure
-aws configure
-# Enter: Access Key, Secret Key, Region (us-east-1), Output (json)
-```
-
-### Step 2: Create VPC & Networking
-
-```bash
-# Create VPC
-aws ec2 create-vpc --cidr-block 10.0.0.0/16 --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=resumebuddy-vpc}]'
-
-# Note the VPC ID, then create subnets
-aws ec2 create-subnet --vpc-id vpc-xxx --cidr-block 10.0.1.0/24 --availability-zone us-east-1a
-aws ec2 create-subnet --vpc-id vpc-xxx --cidr-block 10.0.2.0/24 --availability-zone us-east-1b
-```
-
-### Step 3: Create RDS PostgreSQL
-
-```bash
-aws rds create-db-instance \
-  --db-instance-identifier resumebuddy-db \
-  --db-instance-class db.t3.micro \
-  --engine postgres \
-  --engine-version 15 \
-  --master-username resumebuddy \
-  --master-user-password YOUR_SECURE_PASSWORD \
-  --allocated-storage 20 \
-  --vpc-security-group-ids sg-xxx \
-  --db-subnet-group-name resumebuddy-subnet-group \
-  --backup-retention-period 7
-```
-
-### Step 4: Create ElastiCache Redis
-
-```bash
-aws elasticache create-cache-cluster \
-  --cache-cluster-id resumebuddy-redis \
-  --engine redis \
-  --cache-node-type cache.t3.micro \
-  --num-cache-nodes 1 \
-  --security-group-ids sg-xxx \
-  --cache-subnet-group-name resumebuddy-cache-subnet
-```
-
-### Step 5: Create ECR Repository
-
-```bash
-# Create repository
-aws ecr create-repository --repository-name resumebuddy-web
-aws ecr create-repository --repository-name resumebuddy-latex
-
-# Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
-
-# Build and push
-docker build -t resumebuddy-web -f infrastructure/docker/Dockerfile.web .
-docker tag resumebuddy-web:latest YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/resumebuddy-web:latest
-docker push YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/resumebuddy-web:latest
-```
-
-### Step 6: Create ECS Cluster & Service
-
-Create `ecs-task-definition.json`:
-
-```json
-{
-  "family": "resumebuddy-web",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
-  "executionRoleArn": "arn:aws:iam::xxx:role/ecsTaskExecutionRole",
-  "containerDefinitions": [
-    {
-      "name": "web",
-      "image": "YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/resumebuddy-web:latest",
-      "portMappings": [
-        {
-          "containerPort": 9002,
-          "protocol": "tcp"
-        }
-      ],
-      "environment": [
-        {"name": "NODE_ENV", "value": "production"}
-      ],
-      "secrets": [
-        {"name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:xxx"},
-        {"name": "REDIS_URL", "valueFrom": "arn:aws:secretsmanager:xxx"}
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/resumebuddy",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "web"
-        }
-      }
-    }
-  ]
-}
-```
-
-```bash
-# Register task definition
-aws ecs register-task-definition --cli-input-json file://ecs-task-definition.json
-
-# Create cluster
-aws ecs create-cluster --cluster-name resumebuddy-cluster
-
-# Create service with ALB
-aws ecs create-service \
-  --cluster resumebuddy-cluster \
-  --service-name resumebuddy-web \
-  --task-definition resumebuddy-web \
-  --desired-count 2 \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx,subnet-yyy],securityGroups=[sg-xxx],assignPublicIp=ENABLED}" \
-  --load-balancers "targetGroupArn=arn:aws:elasticloadbalancing:xxx,containerName=web,containerPort=9002"
-```
-
-### Step 7: Set Up Auto-Scaling
-
-```bash
-# Register scalable target
-aws application-autoscaling register-scalable-target \
-  --service-namespace ecs \
-  --scalable-dimension ecs:service:DesiredCount \
-  --resource-id service/resumebuddy-cluster/resumebuddy-web \
-  --min-capacity 2 \
-  --max-capacity 10
-
-# Create scaling policy
-aws application-autoscaling put-scaling-policy \
-  --policy-name resumebuddy-cpu-scaling \
-  --service-namespace ecs \
-  --scalable-dimension ecs:service:DesiredCount \
-  --resource-id service/resumebuddy-cluster/resumebuddy-web \
-  --policy-type TargetTrackingScaling \
-  --target-tracking-scaling-policy-configuration '{
-    "TargetValue": 70.0,
-    "PredefinedMetricSpecification": {
-      "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
-    },
-    "ScaleInCooldown": 300,
-    "ScaleOutCooldown": 60
-  }'
-```
-
-**AWS Monthly Cost Estimate**:
-| Service | Configuration | Cost |
-|---------|--------------|------|
-| ECS Fargate | 2 tasks (0.5 vCPU, 1GB) | ~$30 |
-| RDS PostgreSQL | db.t3.micro | ~$15 |
-| ElastiCache | cache.t3.micro | ~$15 |
-| ALB | Standard | ~$20 |
-| CloudFront | 100GB transfer | ~$10 |
-| S3 | 50GB storage | ~$2 |
-| **Total** | | **~$92/mo** |
-
----
-
-## Option C: Google Cloud Platform
-
-**Best for**: Google ecosystem, Cloud Run, Cloud SQL PostgreSQL
-**Starting cost**: ~$50/month
-
-### Quick Setup with Cloud Run
-
-```bash
-# Install gcloud CLI
-# https://cloud.google.com/sdk/docs/install
-
-# Authenticate
-gcloud auth login
-gcloud config set project YOUR_PROJECT_ID
-
-# Enable APIs
-gcloud services enable \
-  cloudbuild.googleapis.com \
-  run.googleapis.com \
-  secretmanager.googleapis.com \
-  sqladmin.googleapis.com
-
-# Create Cloud SQL PostgreSQL
-gcloud sql instances create resumebuddy-db \
-  --database-version=POSTGRES_15 \
-  --tier=db-f1-micro \
-  --region=us-central1
-
-# Deploy to Cloud Run
-gcloud run deploy resumebuddy \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars "NODE_ENV=production" \
-  --set-secrets "GROQ_API_KEY=groq-api-key:latest,DATABASE_URL=db-url:latest"
-```
-
----
-
-## LaTeX Service Deployment
-
-### Dedicated Deployment (All Platforms)
-
-The LaTeX service should be deployed separately for better resource management.
-
-#### Docker Image Build
-
-```bash
-cd services/resume-latex-service
-
-# Build optimized production image
-docker build -t resumebuddy-latex:latest .
-
-# Tag for registry
-docker tag resumebuddy-latex:latest YOUR_REGISTRY/resumebuddy-latex:latest
-
-# Push to registry
-docker push YOUR_REGISTRY/resumebuddy-latex:latest
-```
-
-#### Resource Requirements
-
-| Scale | RAM | CPU | Concurrent Requests |
-|-------|-----|-----|---------------------|
-| Small (100 users) | 1GB | 1 vCPU | 3 |
-| Medium (500 users) | 2GB | 2 vCPU | 6 |
-| Large (1000+ users) | 4GB | 4 vCPU | 12 |
-
-#### Health Check Configuration
+Create `/opt/resumebuddy/docker-compose.yml`:
 
 ```yaml
-# All platforms should configure:
-health_check:
-  path: /healthz
-  interval: 30s
-  timeout: 10s
-  healthy_threshold: 2
-  unhealthy_threshold: 3
+services:
+  latex:
+    build: /opt/Resume-Buddy_v3/services/resume-latex-service
+    container_name: latex-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    mem_limit: 1536m
+
+  minio:
+    image: minio/minio:latest
+    container_name: resumebuddy-minio
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: CHANGE_THIS_STRONG_PASSWORD
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  minio_data:
+```
+
+Start services:
+
+```bash
+docker compose up -d
+```
+
+Create MinIO bucket:
+
+```bash
+docker run --rm --network host minio/mc sh -c "\
+mc alias set rb http://127.0.0.1:9000 minioadmin CHANGE_THIS_STRONG_PASSWORD && \
+mc mb rb/resumebuddy --ignore-existing"
+```
+
+Health checks:
+
+```bash
+curl http://127.0.0.1:8080/healthz
+curl http://127.0.0.1:9000/minio/health/live
 ```
 
 ---
 
-## CI/CD Pipeline Setup
+## Step 8: Configure Vercel environment variables
 
-### GitHub Actions (Recommended)
+In Vercel -> Project -> Settings -> Environment Variables, add:
 
-Create `.github/workflows/deploy.yml`:
+```env
+NODE_ENV=production
+NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
+
+DATABASE_URL=postgresql://...
+REDIS_URL=rediss://default:...@...upstash.io:6379
+
+JWT_SECRET=your_32_plus_char_secret
+JWT_REFRESH_SECRET=your_other_32_plus_char_secret
+SESSION_COOKIE_NAME=rb_session
+SESSION_TTL=604800
+
+GROQ_API_KEY=...
+GOOGLE_API_KEY=...
+OPENROUTER_API_KEY=...
+
+LATEX_SERVICE_URL=http://YOUR_DROPLET_IP:8080
+MINIO_ENDPOINT=http://YOUR_DROPLET_IP:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=CHANGE_THIS_STRONG_PASSWORD
+MINIO_BUCKET=resumebuddy
+```
+
+If using OAuth:
+
+```env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+```
+
+---
+
+## Step 9: Database migration and generate Prisma client
+
+From local machine:
+
+```bash
+npm install
+npm run db:generate
+npm run db:migrate
+```
+
+If migrate fails with pooled URL, use direct Supabase URL temporarily for migration.
+
+---
+
+## Step 10: Validate full flow
+
+1. Open Vercel app URL
+2. Sign up / login
+3. Trigger resume upload/export
+4. Check Droplet logs:
+
+```bash
+docker logs -f latex-service
+```
+
+5. Open MinIO console:
+`http://YOUR_DROPLET_IP:9001`
+
+---
+
+## Option 2: Same as Option 1 + Managed Realtime (Best with Vercel)
+
+Use this if you want WebSocket-like realtime but keep app on Vercel.
+
+Recommended providers:
+- Pusher (free tier)
+- Ably (free tier)
+
+Why this option:
+- No separate websocket server to maintain
+- Works well with Vercel
+- Easier for beginners
+
+Steps:
+1. Complete Option 1 first
+2. Create Pusher/Ably app
+3. Add provider keys to Vercel env
+4. Update frontend and backend realtime integration to provider SDK
+5. Redeploy
+
+---
+
+## Option 3: Same as Option 1 + Self-Hosted WebSocket on DigitalOcean
+
+Use this if you want your own websocket server.
+
+High-level:
+1. Keep Next.js on Vercel
+2. Deploy websocket server on DigitalOcean (second service/container)
+3. Set `WEBSOCKET_URL=ws://your-websocket-domain-or-ip`
+4. Point frontend to websocket URL
+
+Note:
+- This is more complex than Option 2
+- For beginners, Option 2 is safer
+
+---
+
+## Full Automation (Git Push -> Live)
+
+You need automation for two places:
+1. **Vercel app deploy**
+2. **DigitalOcean LaTeX/MinIO update flow**
+
+### A) Vercel automation (easy)
+
+When repo is connected to Vercel:
+- Every push to `main` auto-deploys
+- No extra CI required
+
+Optional checks before deploy:
+- Add GitHub Actions test workflow
+- Let Vercel deploy only if checks pass
+
+### B) DigitalOcean automation for LaTeX
+
+MinIO data should persist and usually does not redeploy often.
+LaTeX service should auto-update on push.
+
+Recommended automation using GitHub Actions + SSH deploy:
+
+Create `.github/workflows/deploy-latex-droplet.yml`:
 
 ```yaml
-name: Deploy to Production
+name: Deploy LaTeX to Droplet
 
 on:
   push:
     branches: [main]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+    paths:
+      - 'services/resume-latex-service/**'
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: SSH deploy on droplet
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build application
-        run: npm run build
-        env:
-          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-
-      # For Vercel
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod'
-
-      # OR for DigitalOcean
-      - name: Deploy to DigitalOcean
-        uses: digitalocean/app_action@v1
-        with:
-          app_name: resumebuddy
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
-      # OR for AWS
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Deploy to ECS
-        run: |
-          aws ecs update-service --cluster resumebuddy-cluster --service resumebuddy-web --force-new-deployment
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/Resume-Buddy_v3
+            git pull origin main
+            cd /opt/resumebuddy
+            docker compose build latex
+            docker compose up -d latex
+            docker image prune -f
 ```
+
+Add GitHub repo secrets:
+- `DROPLET_HOST` -> droplet IP
+- `DROPLET_USER` -> usually `root`
+- `DROPLET_SSH_KEY` -> private key content
+
+This gives auto-update for LaTeX when code changes.
+
+### C) MinIO automation notes
+
+MinIO is stateful storage, so you usually:
+- Deploy once
+- Keep volume persistent
+- Do not rebuild every push
+
+If you still want auto-update for MinIO image:
+- Add Watchtower container (optional)
+- Or periodic manual update
 
 ---
 
-## Monitoring & Observability
+## Beginner Troubleshooting
 
-### Recommended Stack
+## Problem: Vercel deploy succeeds but app fails
+- Check Vercel logs for missing env vars
+- Ensure `DATABASE_URL` and `REDIS_URL` are set in Production scope
 
-| Tool | Purpose | Free Tier |
-|------|---------|-----------|
-| **Sentry** | Error tracking | 5K errors/mo |
-| **LogTail** | Log aggregation | 1GB/mo |
-| **Uptime Robot** | Uptime monitoring | 50 monitors |
-| **Vercel Analytics** | Performance | Built-in |
+## Problem: Login/session issues
+- Verify `REDIS_URL` is `rediss://...` from Upstash
+- Ensure JWT secrets are present
 
-### Setup Sentry
+## Problem: LaTeX export fails
+- Check `LATEX_SERVICE_URL` points to reachable droplet
+- From droplet run: `curl http://127.0.0.1:8080/healthz`
+- Check container logs: `docker logs latex-service`
 
-```bash
-npm install @sentry/nextjs
+## Problem: MinIO upload fails
+- Verify env values for `MINIO_ENDPOINT`, keys, bucket
+- Ensure bucket `resumebuddy` exists
+- Confirm port `9000` is open from app side
 
-# Run setup wizard
-npx @sentry/wizard@latest -i nextjs
-```
-
-### Health Check Endpoints
-
-Ensure these are monitored:
-
-| Endpoint | Service | Expected |
-|----------|---------|----------|
-| `/api/health` | Next.js | `{"status":"ok"}` |
-| `/healthz` | LaTeX | `{"status":"ok"}` |
-| `/readyz` | LaTeX | Queue status |
-| `/metrics` | LaTeX | Prometheus metrics |
+## Problem: WebSocket not stable on Vercel
+- Use Option 2 (Pusher/Ably) or Option 3 websocket server on Droplet
 
 ---
 
-## Security Checklist
+## Go-Live Checklist
 
-### Pre-Deployment
+### Accounts + infra
+- [ ] Vercel connected to GitHub repo
+- [ ] Supabase DB created
+- [ ] Upstash Redis created
+- [ ] DigitalOcean Droplet created
+- [ ] LaTeX + MinIO containers running
 
-- [ ] All secrets stored in environment variables (not code)
-- [ ] JWT secrets are strong (32+ characters, cryptographically random)
-- [ ] Database access restricted (connection pooling, SSL required)
-- [ ] CORS properly configured
-- [ ] Rate limiting enabled
-- [ ] Input validation on all endpoints
+### Environment
+- [ ] All production env vars set in Vercel
+- [ ] `LATEX_SERVICE_URL` points to droplet
+- [ ] `MINIO_*` values are correct
 
-### Post-Deployment
+### Automation
+- [ ] Push to `main` triggers Vercel deploy
+- [ ] GitHub Action deploys LaTeX service to droplet
 
-- [ ] SSL/TLS enabled (HTTPS only)
-- [ ] Security headers configured
-- [ ] Firewall rules set
-- [ ] Backup schedule configured
-- [ ] Monitoring alerts set up
-
-### Security Headers (add to `next.config.js`)
-
-```javascript
-const securityHeaders = [
-  { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
-  { key: 'X-XSS-Protection', value: '1; mode=block' },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
-];
-```
+### Validation
+- [ ] Signup/login works
+- [ ] Resume upload works
+- [ ] PDF generation works
+- [ ] Realtime feature works (Option 2 or 3)
 
 ---
 
-## Backup & Disaster Recovery
+## Cost Snapshot (Free-Tier Focus)
 
-### Database Backups
+During trial/credits period:
+- Vercel: free tier
+- Supabase: free tier
+- Upstash: free tier
+- DigitalOcean: free via credits (temporary)
 
-#### DigitalOcean Managed DB
-- Automatic daily backups (7-day retention)
-- Point-in-time recovery available
-
-#### AWS RDS
-```bash
-# Create manual snapshot
-aws rds create-db-snapshot \
-  --db-instance-identifier resumebuddy-db \
-  --db-snapshot-identifier resumebuddy-backup-$(date +%Y%m%d)
-```
-
-#### Supabase / PostgreSQL
-- Enable automatic daily backups in Supabase Dashboard
-- Use pg_dump for manual backups:
-
-```bash
-# Manual PostgreSQL backup
-pg_dump $DATABASE_URL > backup-$(date +%Y%m%d).sql
-
-# Restore from backup
-psql $DATABASE_URL < backup-20241201.sql
-```
-
-### Recovery Procedures
-
-1. **Database Corruption**: Restore from latest snapshot
-2. **Service Outage**: Roll back to previous container version
-3. **Complete Failure**: Redeploy from Git + restore database
+After credits:
+- Droplet cost starts (typically ~$6 to $12+ depending on size)
 
 ---
 
-## Summary Comparison
+## Final Recommendation for You
 
-| Aspect | Free (Vercel) | Mid (DigitalOcean) | Enterprise (AWS) |
-|--------|--------------|--------------------|--------------------|
-| **Cost** | $0 | ~$70/mo | ~$100+/mo |
-| **Users** | ~1,000 | ~5,000 | 10,000+ |
-| **Auto-scaling** | Limited | Manual | Full auto |
-| **Setup Time** | 10 min | 1 hour | 4+ hours |
-| **Maintenance** | Minimal | Low | Medium |
-| **Best For** | MVPs | Production | Enterprise |
+For your exact goal and beginner experience:
+1. Start with **Option 1** first (core deploy)
+2. Add **Option 2** for realtime (easier than self-hosted websocket)
+3. Keep **Option 3** only if you specifically need your own websocket server
 
----
-
-## Quick Reference Commands
-
-```bash
-# Vercel
-vercel --prod                          # Deploy to production
-vercel logs                            # View logs
-vercel env pull                        # Pull env vars
-
-# DigitalOcean
-doctl apps list                        # List apps
-doctl apps logs APP_ID                 # View logs
-doctl compute droplet list             # List droplets
-
-# AWS
-aws ecs list-services --cluster NAME   # List services
-aws logs tail /ecs/resumebuddy         # View logs
-aws ecs update-service --force-new-deployment  # Redeploy
-
-# Docker
-docker logs resumebuddy-latex          # View container logs
-docker stats                           # Resource usage
-docker system prune -a                 # Clean up
-```
-
----
-
-## Need Help?
-
-- **Issues**: Open a GitHub issue
-- **Documentation**: Check `/docs` folder
-- **LaTeX Service**: See `services/resume-latex-service/README.md`
+This gives the fastest path to a live product with auto deployment on Git push.

@@ -2,6 +2,8 @@
 
 A complete step-by-step guide to deploy the Resume LaTeX Service on DigitalOcean, optimized for **500 concurrent users** with cost-effective configurations.
 
+This guide is updated for **Resume-Buddy_v3** and includes optional co-hosting of **MinIO** on the same Droplet (recommended for the current architecture).
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -9,6 +11,7 @@ A complete step-by-step guide to deploy the Resume LaTeX Service on DigitalOcean
 - [Option 1: App Platform (Recommended for <100 users)](#option-1-app-platform-recommended)
 - [Option 2: Droplet with Docker (Recommended for 500 users)](#option-2-droplet-with-docker)
 - [Option 3: Container Registry + App Platform](#option-3-container-registry--app-platform)
+- [Co-host MinIO on DigitalOcean Droplet (Recommended for ResumeBuddy v3)](#co-host-minio-on-digitalocean-droplet-recommended-for-resumebuddy-v3)
 - [Scaling for 500 Users](#scaling-for-500-users)
 - [Domain & SSL Configuration](#domain--ssl-configuration)
 - [Integration with Main App](#integration-with-main-app)
@@ -121,7 +124,7 @@ DigitalOcean App Platform is the easiest way to deploy - similar to Heroku/Verce
 Ensure your code is pushed to GitHub:
 
 ```bash
-cd d:\3-1 AD\Resume_Buddy
+cd d:\Resume_Buddy_v3
 git add services/resume-latex-service
 git commit -m "Add LaTeX service for deployment"
 git push origin main
@@ -133,7 +136,7 @@ git push origin main
 2. Click **"Create App"**
 3. Select **GitHub** as source
 4. Authorize DigitalOcean to access your GitHub account
-5. Select repository: `Resume-Buddy_v2`
+5. Select repository: `Resume-Buddy_v3`
 6. Select branch: `main`
 7. Set **Source Directory**: `services/resume-latex-service`
 8. Click **Next**
@@ -166,7 +169,7 @@ region: nyc
 services:
   - name: latex-service
     github:
-      repo: Rajeevkavala/Resume-Buddy_v2
+      repo: Rajeevkavala/Resume-Buddy_v3
       branch: main
       deploy_on_push: true
     source_dir: services/resume-latex-service
@@ -307,8 +310,8 @@ docker --version
 
 ```bash
 # Clone repository
-git clone https://github.com/Rajeevkavala/Resume-Buddy_v2.git
-cd Resume-Buddy_v2/services/resume-latex-service
+git clone https://github.com/Rajeevkavala/Resume-Buddy_v3.git
+cd Resume-Buddy_v3/services/resume-latex-service
 
 # Build Docker image
 docker build -t resume-latex-service .
@@ -342,6 +345,55 @@ docker run -d \
   --memory-reservation=1024m \
   -e NODE_ENV=production \
   registry.digitalocean.com/your-registry/latex-service:latest
+```
+
+### Step 4.1: (Recommended for v3) Run LaTeX + MinIO with Docker Compose
+
+If you want both LaTeX and MinIO on the same Droplet:
+
+```bash
+mkdir -p /opt/resumebuddy && cd /opt/resumebuddy
+
+cat > docker-compose.yml << 'EOF'
+services:
+  latex:
+    build: /root/Resume-Buddy_v3/services/resume-latex-service
+    container_name: latex-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    mem_limit: 1536m
+
+  minio:
+    image: minio/minio:latest
+    container_name: resumebuddy-minio
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: REPLACE_WITH_STRONG_PASSWORD
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  minio_data:
+EOF
+
+docker compose up -d
+```
+
+Create default MinIO bucket (`resumebuddy`):
+
+```bash
+docker run --rm --network host minio/mc sh -c "\
+mc alias set rb http://127.0.0.1:9000 minioadmin REPLACE_WITH_STRONG_PASSWORD && \
+mc mb rb/resumebuddy --ignore-existing"
 ```
 
 ### Step 5: Setup Nginx Reverse Proxy (Recommended for Production)
@@ -443,11 +495,44 @@ certbot --nginx -d your-domain.com
 # Allow SSH, HTTP, HTTPS
 ufw allow OpenSSH
 ufw allow 'Nginx Full'
+
+# If exposing backend ports directly (no reverse proxy), allow these:
+ufw allow 8080/tcp   # LaTeX API
+ufw allow 9000/tcp   # MinIO S3 API
+ufw allow 9001/tcp   # MinIO Console (restrict to your IP where possible)
+
 ufw enable
 
 # Verify
 ufw status
 ```
+
+---
+
+## Co-host MinIO on DigitalOcean Droplet (Recommended for ResumeBuddy v3)
+
+Use this when your main app is on Vercel/Supabase/Upstash and you want DigitalOcean only for LaTeX + object storage.
+
+### Why this matches v3
+
+- `LATEX_SERVICE_URL` points to Droplet LaTeX service.
+- `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET` point to Droplet MinIO.
+- Keeps infrastructure simple and cost-effective.
+
+### Minimum environment values in main app
+
+```env
+LATEX_SERVICE_URL=http://YOUR_DROPLET_IP:8080
+
+MINIO_ENDPOINT=http://YOUR_DROPLET_IP:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=REPLACE_WITH_STRONG_PASSWORD
+MINIO_BUCKET=resumebuddy
+```
+
+Optional hardening:
+- Put Nginx/Caddy in front and use HTTPS.
+- Restrict MinIO Console (`9001`) to your own IP.
 
 ---
 
@@ -474,7 +559,7 @@ doctl registry login
 
 ```powershell
 # On your local machine (Windows)
-cd "D:\3-1 AD\Resume_Buddy\services\resume-latex-service"
+cd "D:\Resume_Buddy_v3\services\resume-latex-service"
 
 # Build for linux/amd64 (required for DO)
 docker build --platform linux/amd64 -t registry.digitalocean.com/resume-services/latex-service:latest .
@@ -703,17 +788,23 @@ LATEX_SERVICE_URL=https://latex.yourdomain.com
 
 # For Droplet without domain
 LATEX_SERVICE_URL=http://YOUR_DROPLET_IP:8080
+
+# If MinIO is on same Droplet
+MINIO_ENDPOINT=http://YOUR_DROPLET_IP:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=REPLACE_WITH_STRONG_PASSWORD
+MINIO_BUCKET=resumebuddy
 ```
 
 ### 2. Redeploy Main App
 
-If using Firebase App Hosting, update the environment:
+If using Vercel (recommended for this repo), set these in Project Settings → Environment Variables and redeploy.
+
+If using another platform, set the same environment variables there and redeploy.
 
 ```bash
-# Add to apphosting.yaml
-env:
-  - variable: LATEX_SERVICE_URL
-    value: https://resume-latex-service-xxxxx.ondigitalocean.app
+# Example (local verification only)
+npm run dev
 ```
 
 ### 3. Test Integration
@@ -1094,6 +1185,7 @@ doctl compute droplet delete latex-service
 ### Integration
 
 - [ ] `LATEX_SERVICE_URL` set in main app
+- [ ] `MINIO_ENDPOINT` and `MINIO_*` set in main app (if MinIO on Droplet)
 - [ ] Main app can call LaTeX service
 - [ ] PDF export working from dashboard
 
