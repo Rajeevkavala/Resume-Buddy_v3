@@ -1,7 +1,11 @@
 {
+  "version": 2,
   "framework": "nextjs",
   "buildCommand": "npm run build:vercel",
   "installCommand": "npm install --legacy-peer-deps",
+  "outputDirectory": ".next",
   "ignoreCommand": "git diff --quiet HEAD^ HEAD ./",
-  "outputDirectory": ".next"
+  "github": {
+    "silent": true
+  }
 }

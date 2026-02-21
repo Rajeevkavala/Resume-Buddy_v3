@@ -15,8 +15,9 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   
-  // Standalone output for Docker deployments (smaller image, faster cold starts)
-  output: 'standalone',
+  // Standalone output for Docker deployments only (not Vercel)
+  // Vercel handles this automatically
+  ...(process.env.VERCEL !== '1' && { output: 'standalone' }),
   
   // Disable X-Powered-By header for security
   poweredByHeader: false,

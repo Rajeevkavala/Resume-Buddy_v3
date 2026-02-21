@@ -1,0 +1,19 @@
+# Ignore services (should be deployed separately)
+services/
+
+# Ignore non-essential directories
+apps/websocket/
+docs/
+scripts/
+tests/
+infrastructure/
+
+# Ignore config files
+.env.local
+.env.development
+*.local
+
+# Ignore build artifacts
+dist/
+coverage/
+*.log
