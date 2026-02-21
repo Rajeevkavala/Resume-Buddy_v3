@@ -173,9 +173,9 @@ Basic firewall:
 
 ```bash
 ufw allow OpenSSH
-ufw allow 8080/tcp   # LaTeX API
-ufw allow 9000/tcp   # MinIO API
-ufw allow 9001/tcp   # MinIO Console (later restrict to your IP)
+ufw allow 8080/tcp  
+ufw allow 9000/tcp  
+ufw allow 9001/tcp   
 ufw enable
 ufw status
 ```
