@@ -4,7 +4,7 @@ This guide will walk you through the process of pushing your project code to a G
 
 ## 1. Pushing for the First Time
 
-If you have a new project locally and want to upload it to a new, empty repository on GitHub, follow these steps.
+If you have a new project locally and want to upload it to a new, empty repository on GitHub, follow these steps .
 
 ### Step 1: Create a New Repository on GitHub
 
