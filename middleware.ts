@@ -28,6 +28,19 @@ const ADMIN_ROUTES = [
   '/admin',
 ];
 
+const CSP_HEADER = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: https: blob:",
+  "connect-src 'self' https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com https://www.resume-buddy.tech https://resume-buddy-v3.vercel.app http://165.232.181.37:8080 http://165.232.181.37:9000",
+  "frame-src https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "worker-src 'self' blob:"
+].join('; ');
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const response = NextResponse.next();
@@ -38,21 +51,7 @@ export function middleware(request: NextRequest) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   
-  // Content Security Policy to prevent unauthorized data access
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
-    "font-src 'self' https://fonts.gstatic.com data:",
-    "img-src 'self' data: https: blob:",
-    "connect-src 'self' https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com https://www.resume-buddy.tech https://resume-buddy-v3.vercel.app http://165.232.181.37:8080 http://165.232.181.37:9000",
-    "frame-src https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "worker-src 'self' blob:"
-  ].join('; ');
-  
-  response.headers.set('Content-Security-Policy', csp);
+  response.headers.set('Content-Security-Policy', CSP_HEADER);
 
   // Check for authentication cookie (new JWT auth system)
   const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'rb_session';

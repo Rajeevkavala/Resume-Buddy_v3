@@ -76,6 +76,9 @@ const defaultContext: SubscriptionContextType = {
   refreshExportUsage: async () => {},
 };
 
+const SUBSCRIPTION_CACHE_KEY = 'subscription_state_v1';
+const SUBSCRIPTION_CACHE_TTL_MS = 30_000;
+
 // ============ Context ============
 
 const SubscriptionContext = createContext<SubscriptionContextType>(defaultContext);
@@ -98,6 +101,30 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [limits, setLimits] = useState<TierLimits>(defaultLimits);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<string | undefined>();
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState<boolean | undefined>();
+
+  const writeSubscriptionCache = useCallback((uid: string, state: SubscriptionState) => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem(
+      `${SUBSCRIPTION_CACHE_KEY}:${uid}`,
+      JSON.stringify({ timestamp: Date.now(), data: state }),
+    );
+  }, []);
+
+  const readSubscriptionCache = useCallback((uid: string): SubscriptionState | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const rawCache = sessionStorage.getItem(`${SUBSCRIPTION_CACHE_KEY}:${uid}`);
+      if (!rawCache) return null;
+      const parsed = JSON.parse(rawCache) as { timestamp: number; data: SubscriptionState };
+      if (Date.now() - parsed.timestamp > SUBSCRIPTION_CACHE_TTL_MS) {
+        sessionStorage.removeItem(`${SUBSCRIPTION_CACHE_KEY}:${uid}`);
+        return null;
+      }
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  }, []);
   
   // Refresh subscription status
   const refreshSubscription = useCallback(async () => {
@@ -107,6 +134,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setLimits(defaultLimits);
       setIsLoading(false);
       return;
+    }
+
+    const cached = readSubscriptionCache(user.uid);
+    if (cached) {
+      setTier(cached.tier);
+      setStatus(cached.status);
+      setLimits(cached.limits);
+      setDailyAICreditsUsed(cached.dailyAICreditsUsed);
+      setDailyAICreditsRemaining(cached.dailyAICreditsRemaining);
+      setDailyExportsUsed(cached.dailyExportsUsed);
+      setDailyExportsRemaining(cached.dailyExportsRemaining);
+      setCurrentPeriodEnd(cached.currentPeriodEnd);
+      setCancelAtPeriodEnd(cached.cancelAtPeriodEnd);
+      setIsLoading(false);
     }
     
     try {
@@ -124,6 +165,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setDailyExportsRemaining(state.dailyExportsRemaining);
         setCurrentPeriodEnd(state.currentPeriodEnd);
         setCancelAtPeriodEnd(state.cancelAtPeriodEnd);
+        writeSubscriptionCache(user.uid, state);
       } else {
         setError(result.error || 'Failed to load subscription');
       }
@@ -133,7 +175,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.uid]);
+  }, [user?.uid, readSubscriptionCache, writeSubscriptionCache]);
   
   // Refresh just export usage (lighter weight)
   const refreshExportUsage = useCallback(async () => {

@@ -44,6 +44,9 @@ const AuthContext = createContext<AuthContextType>({
   accessDeniedReason: '',
 });
 
+const AUTH_CACHE_KEY = 'auth_session_user_v1';
+const AUTH_CACHE_TTL_MS = 30_000;
+
 // ============ Helpers ============
 
 /** Map API response user → AppUser (with backward-compat aliases) */
@@ -97,6 +100,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  const writeAuthCache = useCallback((appUser: AppUser | null) => {
+    if (typeof window === 'undefined') return;
+
+    if (!appUser) {
+      sessionStorage.removeItem(AUTH_CACHE_KEY);
+      return;
+    }
+
+    sessionStorage.setItem(
+      AUTH_CACHE_KEY,
+      JSON.stringify({ timestamp: Date.now(), user: appUser }),
+    );
+  }, []);
+
+  const readAuthCache = useCallback((): AppUser | null => {
+    if (typeof window === 'undefined') return null;
+
+    try {
+      const rawCache = sessionStorage.getItem(AUTH_CACHE_KEY);
+      if (!rawCache) return null;
+
+      const parsed = JSON.parse(rawCache) as { timestamp: number; user: AppUser };
+      if (Date.now() - parsed.timestamp > AUTH_CACHE_TTL_MS) {
+        sessionStorage.removeItem(AUTH_CACHE_KEY);
+        return null;
+      }
+
+      return parsed.user;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // ---------- Set user + fire data-loaded event ----------
 
   const setAuthenticatedUser = useCallback((appUser: AppUser) => {
@@ -106,6 +142,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setAccessDeniedReason('');
       setLoading(false);
     });
+
+    writeAuthCache(appUser);
 
     // Fire data-loaded event for other contexts
     Promise.resolve().then(() => {
@@ -118,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Silently handle
       }
     });
-  }, []);
+  }, [writeAuthCache]);
 
   // ---------- Initial Load ----------
 
@@ -127,19 +165,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Session cookie is httpOnly (not readable in JS). Always validate with the server.
     let cancelled = false;
+
+    const cachedUser = readAuthCache();
+    if (cachedUser) {
+      setAuthenticatedUser(cachedUser);
+    }
+
     fetchSession().then(sessionUser => {
       if (cancelled) return;
       if (sessionUser) {
         setAuthenticatedUser(sessionUser);
       } else {
         startTransition(() => {
+          setUser(null);
           setLoading(false);
         });
+        writeAuthCache(null);
       }
     });
 
     return () => { cancelled = true; };
-  }, [fetchSession, setAuthenticatedUser]);
+  }, [fetchSession, setAuthenticatedUser, readAuthCache, writeAuthCache]);
 
   // ---------- Reload user (after profile update) ----------
 
@@ -163,6 +209,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setLoading(false);
       });
 
+      writeAuthCache(null);
+
       if (user) {
         clearUserData(user.id);
       }
@@ -182,7 +230,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch {
       // Silently handle sign-out errors
     }
-  }, [user, router]);
+  }, [user, router, writeAuthCache]);
 
   // ---------- Google Sign-In ----------
 

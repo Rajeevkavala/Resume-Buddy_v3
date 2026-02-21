@@ -42,6 +42,31 @@ const PROTECTED_ROUTES = [
   '/admin',
 ];
 
+const RESUME_DATA_ROUTES = [
+  '/dashboard',
+  '/analysis',
+  '/qa',
+  '/interview',
+  '/improvement',
+  '/create-resume',
+  '/resume-library',
+  '/cover-letter',
+];
+
+const PREFETCH_ROUTES_AUTH = [
+  '/dashboard',
+  '/analysis',
+  '/qa',
+  '/interview',
+  '/improvement',
+  '/create-resume',
+  '/resume-library',
+  '/billing',
+  '/profile',
+];
+
+const PREFETCH_ROUTES_PUBLIC = ['/', '/login', '/signup', '/pricing'];
+
 // Component to handle conditional layout rendering
 function ConditionalLayoutWrapper({ children }: { children: ReactNode }) {
   const { user, isAllowed, loading, accessDeniedReason } = useAuth();
@@ -66,6 +91,16 @@ function ConditionalLayoutWrapper({ children }: { children: ReactNode }) {
       router.replace('/access-denied?reason=' + encodeURIComponent(accessDeniedReason || 'Access denied'));
     }
   }, [loading, user, isAllowed, isProtectedRoute, router, accessDeniedReason]);
+
+  // Prefetch common destinations to make navigation feel instant
+  useEffect(() => {
+    if (loading) return;
+
+    const targets = user ? PREFETCH_ROUTES_AUTH : PREFETCH_ROUTES_PUBLIC;
+    for (const route of targets) {
+      router.prefetch(route);
+    }
+  }, [loading, user, router]);
   
   // If user is blocked and trying to access protected route, show nothing while redirecting
   if (!loading && user && !isAllowed && isProtectedRoute) {
@@ -92,6 +127,20 @@ function ConditionalLayoutWrapper({ children }: { children: ReactNode }) {
   );
 }
 
+function RouteScopedProviders({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
+  const needsResumeContext = RESUME_DATA_ROUTES.some(
+    route => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
+  if (needsResumeContext) {
+    return <ResumeProvider>{children}</ResumeProvider>;
+  }
+
+  return <>{children}</>;
+}
+
 // Dynamically import WebVitals for performance monitoring
 const WebVitals = dynamic(() => import('@/components/web-vitals').then(mod => ({ default: mod.WebVitals })), {
   ssr: false,
@@ -109,7 +158,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
         <Suspense fallback={null}>
           <AuthProvider>
             <SubscriptionProvider>
-              <ResumeProvider>
+              <RouteScopedProviders>
                 <ConditionalLayoutWrapper>
                   {children}
                 </ConditionalLayoutWrapper>
@@ -117,7 +166,7 @@ export default function ClientLayout({ children }: ClientLayoutProps) {
                 <ClientServiceWorker />
                 <UpdatePrompt />
                 <WebVitals />
-              </ResumeProvider>
+              </RouteScopedProviders>
             </SubscriptionProvider>
           </AuthProvider>
         </Suspense>
