@@ -53,14 +53,45 @@ export function getRedisClient(): Redis {
 }
 
 /**
- * Check if Redis is available
+ * Check if Redis is available.
+ * Uses the ioredis connection status directly — no network round-trip ping.
+ * Falls back to a real ping if the status is ambiguous, but caches the result
+ * for 30 seconds so repeated calls within the same window are free.
  */
+let _redisAvailableCache: { value: boolean; until: number } = { value: false, until: 0 };
+const REDIS_AVAILABLE_TTL = 30_000; // 30 seconds
+
+export function isRedisAvailableSync(): boolean {
+  try {
+    const redis = getRedisClient();
+    const status = redis.status; // 'ready' | 'connecting' | 'reconnecting' | 'close' | 'end'
+    return status === 'ready';
+  } catch {
+    return false;
+  }
+}
+
 export async function isRedisAvailable(): Promise<boolean> {
+  const now = Date.now();
+  if (now < _redisAvailableCache.until) {
+    return _redisAvailableCache.value;
+  }
+
+  // Fast path: trust ioredis status
+  if (isRedisAvailableSync()) {
+    _redisAvailableCache = { value: true, until: now + REDIS_AVAILABLE_TTL };
+    return true;
+  }
+
+  // Slow path: try a real ping when status is uncertain
   try {
     const redis = getRedisClient();
     const result = await redis.ping();
-    return result === 'PONG';
+    const available = result === 'PONG';
+    _redisAvailableCache = { value: available, until: now + REDIS_AVAILABLE_TTL };
+    return available;
   } catch {
+    _redisAvailableCache = { value: false, until: now + 5_000 }; // shorter TTL on failure
     return false;
   }
 }

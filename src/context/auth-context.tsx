@@ -45,7 +45,14 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 const AUTH_CACHE_KEY = 'auth_session_user_v1';
-const AUTH_CACHE_TTL_MS = 30_000;
+// 5-minute cache: reduces /api/auth/session roundtrips on every page navigation.
+// The session route itself is cached in Redis on the server side, but the network
+// hop (~100-300ms) adds up on every client-side route change.
+const AUTH_CACHE_TTL_MS = 5 * 60 * 1_000; // 5 minutes
+// Background-refresh threshold: re-validate the session when the cache is older
+// than this, even if it hasn't expired yet. This keeps data reasonably fresh
+// without blocking navigation.
+const AUTH_CACHE_REFRESH_AFTER_MS = 2 * 60 * 1_000; // 2 minutes
 
 // ============ Helpers ============
 
@@ -158,19 +165,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   }, [writeAuthCache]);
 
+  /** Returns true when the cache exists but is stale enough to warrant a background refresh */
+  const isCacheStale = useCallback((): boolean => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const rawCache = sessionStorage.getItem(AUTH_CACHE_KEY);
+      if (!rawCache) return true;
+      const parsed = JSON.parse(rawCache) as { timestamp: number };
+      return Date.now() - parsed.timestamp > AUTH_CACHE_REFRESH_AFTER_MS;
+    } catch {
+      return true;
+    }
+  }, []);
+
   // ---------- Initial Load ----------
 
   useEffect(() => {
     initializeSecureStorage();
 
-    // Session cookie is httpOnly (not readable in JS). Always validate with the server.
+    // Session cookie is httpOnly (not readable in JS). Validate with the server
+    // only when the client-side cache is missing or stale (> 2 min old).
+    // This eliminates a network round-trip on every page navigation while still
+    // keeping the session fresh.
     let cancelled = false;
 
     const cachedUser = readAuthCache();
     if (cachedUser) {
       setAuthenticatedUser(cachedUser);
+      // Cache is fresh enough — skip the API call entirely on this navigation
+      if (!isCacheStale()) return () => { cancelled = true; };
     }
 
+    // Cache is missing, expired, or stale — fetch from server
     fetchSession().then(sessionUser => {
       if (cancelled) return;
       if (sessionUser) {
@@ -185,7 +211,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => { cancelled = true; };
-  }, [fetchSession, setAuthenticatedUser, readAuthCache, writeAuthCache]);
+  }, [fetchSession, setAuthenticatedUser, readAuthCache, writeAuthCache, isCacheStale]);
 
   // ---------- Reload user (after profile update) ----------
 

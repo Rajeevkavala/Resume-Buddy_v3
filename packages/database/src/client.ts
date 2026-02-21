@@ -67,8 +67,10 @@ function appendPoolParams(url: string): string {
   }
 }
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+// Always assign to global so the singleton persists across hot-reloads in dev
+// AND across module re-evaluations in production (serverless / edge warm instances).
+// Previously this only ran in non-production, meaning every production request that
+// triggered a new module evaluation had to re-establish the full connection pool.
+globalForPrisma.prisma = prisma;
 
 export default prisma;

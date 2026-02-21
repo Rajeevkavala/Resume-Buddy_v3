@@ -81,18 +81,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Update lastLoginAt
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    // 6. Ensure admin role for configured admin emails
+    // 5 & 6. Merge lastLoginAt update + admin role check into a single DB write
     let effectiveRole = user.role;
-    if (isAdminEmail(user.email) && user.role !== 'ADMIN') {
-      await prisma.user.update({ where: { id: user.id }, data: { role: 'ADMIN' } });
-      effectiveRole = 'ADMIN';
-    }
+    const adminUpgrade = isAdminEmail(user.email) && user.role !== 'ADMIN';
+    if (adminUpgrade) effectiveRole = 'ADMIN';
+
+    // Fire non-blocking update (no await — last-login-at is non-critical)
+    prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        ...(adminUpgrade ? { role: 'ADMIN' } : {}),
+      },
+    }).catch(() => {});
 
     // 7. Generate token pair
     const tier = user.subscription?.tier === 'PRO' ? 'pro' : 'free';
@@ -105,34 +106,34 @@ export async function POST(request: NextRequest) {
 
     const tokenPair = await generateTokenPair(tokenUser);
 
-    // 8. Store refresh token in DB
-    await prisma.refreshToken.create({
-      data: {
-        token: tokenPair.refreshToken,
-        userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    // 9. Create Redis session
+    // 8 & 9. Run refresh-token DB write + Redis session creation in parallel
     const userAgent = request.headers.get('user-agent') || undefined;
     const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined;
 
-    const sessionId = await createSession({
-      userId: user.id,
-      email: user.email,
-      name: user.name || undefined,
-      role: effectiveRole,
-      tier,
-      avatar: user.avatar || undefined,
-      userAgent,
-      ipAddress,
-    });
+    const [sessionId] = await Promise.all([
+      createSession({
+        userId: user.id,
+        email: user.email,
+        name: user.name || undefined,
+        role: effectiveRole,
+        tier,
+        avatar: user.avatar || undefined,
+        userAgent,
+        ipAddress,
+      }),
+      prisma.refreshToken.create({
+        data: {
+          token: tokenPair.refreshToken,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      }),
+    ]);
 
     // 10. Set cookies
     await setAuthCookies(sessionId, tokenPair.refreshToken);
 
-    // 11. Return response
+    // 11. Return response (resolveAvatarUrl + response building happen together)
     return NextResponse.json({
       user: {
         id: user.id,

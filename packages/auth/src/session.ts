@@ -120,22 +120,30 @@ export async function getSession(sessionId: string): Promise<SessionData | null>
 
 /**
  * Update the lastActivityAt timestamp for a session.
+ * Uses a Redis pipeline to avoid 3 serial round-trips.
  */
 export async function updateSessionActivity(sessionId: string): Promise<void> {
   const redis = getRedisClient();
   const key = `${SESSION_PREFIX}${sessionId}`;
 
-  const data = await redis.get(key);
-  if (!data) return;
-
   try {
-    const session = JSON.parse(data) as SessionData;
+    // Fetch data and TTL in parallel with a pipeline
+    const pipeline = redis.pipeline();
+    pipeline.get(key);
+    pipeline.ttl(key);
+    const results = await pipeline.exec();
+
+    if (!results) return;
+    const [dataResult, ttlResult] = results;
+    const rawData = dataResult?.[1] as string | null;
+    const ttl = ttlResult?.[1] as number;
+
+    if (!rawData || !ttl || ttl <= 0) return;
+
+    const session = JSON.parse(rawData) as SessionData;
     session.lastActivityAt = Date.now();
 
-    const ttl = await redis.ttl(key);
-    if (ttl > 0) {
-      await redis.set(key, JSON.stringify(session), 'EX', ttl);
-    }
+    await redis.set(key, JSON.stringify(session), 'EX', ttl);
   } catch {
     // Silently fail - non-critical operation
   }

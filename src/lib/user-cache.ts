@@ -3,7 +3,7 @@
  * Caches AI results per user to avoid re-analyzing the same content
  * Falls back to in-memory Map if Redis is unavailable
  */
-import { getRedisClient, isRedisAvailable } from './redis';
+import { getRedisClient, isRedisAvailableSync } from './redis';
 import crypto from 'crypto';
 
 const USER_CACHE_PREFIX = 'user_cache:';
@@ -35,7 +35,7 @@ function buildKey(userId: string, type: CacheType): string {
  */
 async function getCacheEntry(userId: string, type: CacheType): Promise<unknown | null> {
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     const key = buildKey(userId, type);
 
     if (redisAvailable) {
@@ -57,7 +57,7 @@ async function getCacheEntry(userId: string, type: CacheType): Promise<unknown |
  */
 async function setCacheEntry(userId: string, type: CacheType, data: unknown): Promise<void> {
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     const key = buildKey(userId, type);
     const serialized = JSON.stringify(data);
 
@@ -252,7 +252,7 @@ export async function cacheParsedResume(
  */
 export async function clearUserCache(userId: string): Promise<void> {
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     if (redisAvailable) {
       const redis = getRedisClient();
       const keys = await redis.keys(`${USER_CACHE_PREFIX}${userId}:*`);
@@ -280,7 +280,7 @@ export async function getUserCacheStats(): Promise<{
   maxUsers: number;
 }> {
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     if (redisAvailable) {
       const redis = getRedisClient();
       const keys = await redis.keys(`${USER_CACHE_PREFIX}*`);

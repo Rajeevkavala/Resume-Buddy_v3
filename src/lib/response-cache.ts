@@ -3,7 +3,7 @@
  * Caches AI responses to reduce API calls and improve performance
  * Falls back to in-memory Map if Redis is unavailable
  */
-import { getRedisClient, isRedisAvailable } from './redis';
+import { getRedisClient, isRedisAvailableSync } from './redis';
 import crypto from 'crypto';
 
 const CACHE_PREFIX = 'ai_cache:';
@@ -31,7 +31,7 @@ export async function getCachedResponse(
   const key = generateCacheKey(prompt, systemPrompt);
 
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     if (redisAvailable) {
       const redis = getRedisClient();
       const cached = await redis.get(`${CACHE_PREFIX}${key}`);
@@ -67,7 +67,7 @@ export async function setCachedResponse(
   const key = generateCacheKey(prompt, systemPrompt);
 
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     if (redisAvailable) {
       const redis = getRedisClient();
       await redis.setex(
@@ -98,7 +98,7 @@ export async function clearCachedResponse(prompt: string, systemPrompt?: string)
   const key = generateCacheKey(prompt, systemPrompt);
 
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     if (redisAvailable) {
       const redis = getRedisClient();
       await redis.del(`${CACHE_PREFIX}${key}`);
@@ -114,7 +114,7 @@ export async function clearCachedResponse(prompt: string, systemPrompt?: string)
  */
 export async function clearAllCache(): Promise<void> {
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     if (redisAvailable) {
       const redis = getRedisClient();
       const keys = await redis.keys(`${CACHE_PREFIX}*`);
@@ -138,7 +138,7 @@ export async function getCacheStats(): Promise<{
   hitRate: string;
 }> {
   try {
-    const redisAvailable = await isRedisAvailable();
+    const redisAvailable = isRedisAvailableSync();
     if (redisAvailable) {
       const redis = getRedisClient();
       const keys = await redis.keys(`${CACHE_PREFIX}*`);

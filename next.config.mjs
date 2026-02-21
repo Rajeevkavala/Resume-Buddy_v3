@@ -42,6 +42,15 @@ const nextConfig = {
   
   // Enable experimental features for better performance
   experimental: {
+    // Enable the instrumentation.ts hook (DB/Redis warm-up on server start)
+    instrumentationHook: true,
+    // Client-side routing cache: keeps prefetched page data fresh longer,
+    // reducing redundant network requests on navigation.
+    // dynamic: 30s (was 0s default), static: 5min (default)
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
     optimizePackageImports: [
       'lucide-react',
       'framer-motion',

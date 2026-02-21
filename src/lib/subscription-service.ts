@@ -8,6 +8,7 @@
  */
 
 import { prisma } from '@/lib/db';
+import { getRedisClient, isRedisAvailableSync } from '@/lib/redis';
 import {
   type SubscriptionTier,
   type SubscriptionStatus,
@@ -20,6 +21,44 @@ import {
   PRO_ONLY_FEATURES,
   FEATURE_DISPLAY_NAMES,
 } from './types/subscription';
+
+// ============ Subscription Tier Cache ============
+// Caches tier lookup in Redis for TIER_CACHE_TTL seconds to avoid
+// a DB query on every authenticated request.
+const TIER_CACHE_PREFIX = 'sub_tier:';
+const TIER_CACHE_TTL = 300; // 5 minutes
+
+async function getCachedTier(userId: string): Promise<SubscriptionTier | null> {
+  if (!isRedisAvailableSync()) return null;
+  try {
+    const cached = await getRedisClient().get(`${TIER_CACHE_PREFIX}${userId}`);
+    return cached ? (cached as SubscriptionTier) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedTier(userId: string, tier: SubscriptionTier): Promise<void> {
+  if (!isRedisAvailableSync()) return;
+  try {
+    await getRedisClient().setex(`${TIER_CACHE_PREFIX}${userId}`, TIER_CACHE_TTL, tier);
+  } catch {
+    // non-critical
+  }
+}
+
+/**
+ * Invalidate the cached subscription tier for a user.
+ * Call this whenever a subscription is updated/cancelled.
+ */
+export async function invalidateSubscriptionCache(userId: string): Promise<void> {
+  if (!isRedisAvailableSync()) return;
+  try {
+    await getRedisClient().del(`${TIER_CACHE_PREFIX}${userId}`);
+  } catch {
+    // non-critical
+  }
+}
 
 // ============ Date Utilities ============
 
@@ -64,43 +103,48 @@ export async function getSubscription(userId: string) {
 }
 
 /**
- * Get user's subscription tier
- * Returns 'free' if no subscription exists or is expired
+ * Get user's subscription tier.
+ * Returns 'free' if no subscription exists or is expired.
+ * Result is cached in Redis for 5 minutes to avoid repeated DB queries.
  */
 export async function getUserTier(userId: string): Promise<SubscriptionTier> {
   if (!userId) return 'free';
+
+  // Fast path: Redis cache
+  const cachedTier = await getCachedTier(userId);
+  if (cachedTier !== null) return cachedTier;
 
   try {
     const subscription = await prisma.subscription.findUnique({
       where: { userId },
     });
 
-    if (!subscription) return 'free';
+    let tier: SubscriptionTier = 'free';
 
-    // Check if subscription is active
-    if (subscription.status === 'ACTIVE') {
-      if (subscription.currentPeriodEnd) {
-        if (subscription.currentPeriodEnd > new Date()) {
-          return subscription.tier === 'PRO' ? 'pro' : 'free';
+    if (subscription) {
+      // Check if subscription is active
+      if (subscription.status === 'ACTIVE') {
+        if (subscription.currentPeriodEnd) {
+          if (subscription.currentPeriodEnd > new Date()) {
+            tier = subscription.tier === 'PRO' ? 'pro' : 'free';
+          }
+          // else expired → free
+        } else {
+          tier = subscription.tier === 'PRO' ? 'pro' : 'free';
         }
-        return 'free'; // Period expired
-      }
-      return subscription.tier === 'PRO' ? 'pro' : 'free';
-    }
-
-    // Past due: give grace period
-    if (subscription.status === 'PAST_DUE') {
-      return subscription.tier === 'PRO' ? 'pro' : 'free';
-    }
-
-    // Cancelled but still in period
-    if (subscription.status === 'CANCELLED' && subscription.currentPeriodEnd) {
-      if (subscription.currentPeriodEnd > new Date()) {
-        return subscription.tier === 'PRO' ? 'pro' : 'free';
+      } else if (subscription.status === 'PAST_DUE') {
+        // Grace period
+        tier = subscription.tier === 'PRO' ? 'pro' : 'free';
+      } else if (subscription.status === 'CANCELLED' && subscription.currentPeriodEnd) {
+        if (subscription.currentPeriodEnd > new Date()) {
+          tier = subscription.tier === 'PRO' ? 'pro' : 'free';
+        }
       }
     }
 
-    return 'free';
+    // Cache the result before returning
+    await setCachedTier(userId, tier);
+    return tier;
   } catch (error) {
     console.error('Error getting user tier:', error);
     return 'free';
@@ -182,6 +226,9 @@ export async function updateSubscription(
         cancelledAt: prismaData.cancelledAt as Date | undefined,
       },
     });
+
+    // Invalidate cached tier so the next getUserTier() reads fresh data
+    await invalidateSubscriptionCache(userId);
   } catch (error) {
     console.error('Error updating subscription:', error);
     throw new Error('Could not update subscription');
