@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { deleteSession } from '@/lib/auth';
 import { getSessionCookie, clearAuthCookies } from '@/lib/auth-cookies';
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+
 // ============ POST /api/auth/logout ============
 
 export async function POST() {
@@ -18,7 +24,7 @@ export async function POST() {
     await clearAuthCookies();
 
     // 4. Return success
-    return NextResponse.json({ success: true, message: 'Logged out successfully' });
+    return NextResponse.json({ success: true, message: 'Logged out successfully' }, { headers: NO_STORE_HEADERS });
 
   } catch (error) {
     console.error('[Logout] Error:', error);
@@ -28,6 +34,6 @@ export async function POST() {
     } catch {
       // Ignore cookie clear errors
     }
-    return NextResponse.json({ success: true, message: 'Logged out' });
+    return NextResponse.json({ success: true, message: 'Logged out' }, { headers: NO_STORE_HEADERS });
   }
 }

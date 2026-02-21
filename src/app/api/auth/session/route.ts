@@ -35,6 +35,12 @@ interface CachedUserProfile {
   cachedAt: number;
 }
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+
 // ============ GET /api/auth/session ============
 
 export async function GET() {
@@ -44,7 +50,7 @@ export async function GET() {
     if (!sessionId) {
       return NextResponse.json(
         { error: 'No session found' },
-        { status: 401 }
+        { status: 401, headers: NO_STORE_HEADERS }
       );
     }
 
@@ -53,7 +59,7 @@ export async function GET() {
     if (!session) {
       return NextResponse.json(
         { error: 'Session expired or invalid' },
-        { status: 401 }
+        { status: 401, headers: NO_STORE_HEADERS }
       );
     }
 
@@ -70,7 +76,7 @@ export async function GET() {
       if (!user || user.status !== 'ACTIVE') {
         return NextResponse.json(
           { error: 'User not found or account suspended' },
-          { status: 403 }
+          { status: 403, headers: NO_STORE_HEADERS }
         );
       }
 
@@ -128,13 +134,13 @@ export async function GET() {
       },
       accessToken,
       expiresIn: 900,
-    });
+    }, { headers: NO_STORE_HEADERS });
 
   } catch (error) {
     console.error('[Session] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500, headers: NO_STORE_HEADERS }
     );
   }
 }

@@ -142,15 +142,10 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await signInWithGoogle();
-      // Wait for auth state to settle and cookie to be set
-      await new Promise(resolve => setTimeout(resolve, 800));
-      // Use replace to avoid adding to browser history
-      router.replace(getReturnUrl());
     } catch (error) {
       // Error handling is done in signInWithGoogle
       setIsLoading(false);
     }
-    // Keep loading state until redirect completes
   };
 
   return (

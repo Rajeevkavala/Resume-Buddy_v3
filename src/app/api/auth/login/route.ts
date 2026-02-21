@@ -24,6 +24,12 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+
 // ============ POST /api/auth/login ============
 
 export async function POST(request: NextRequest) {
@@ -39,7 +45,7 @@ export async function POST(request: NextRequest) {
     if (!validated.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: validated.error.errors.map((e) => e.message) },
-        { status: 400 }
+        { status: 400, headers: NO_STORE_HEADERS }
       );
     }
 
@@ -54,7 +60,7 @@ export async function POST(request: NextRequest) {
     if (!user || !user.passwordHash) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
-        { status: 401 }
+        { status: 401, headers: NO_STORE_HEADERS }
       );
     }
 
@@ -62,7 +68,7 @@ export async function POST(request: NextRequest) {
     if (user.status !== 'ACTIVE') {
       return NextResponse.json(
         { error: 'Account is suspended. Please contact support.' },
-        { status: 403 }
+        { status: 403, headers: NO_STORE_HEADERS }
       );
     }
 
@@ -71,7 +77,7 @@ export async function POST(request: NextRequest) {
     if (!isValidPassword) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
-        { status: 401 }
+        { status: 401, headers: NO_STORE_HEADERS }
       );
     }
 
@@ -139,13 +145,13 @@ export async function POST(request: NextRequest) {
       },
       accessToken: tokenPair.accessToken,
       expiresIn: tokenPair.expiresIn,
-    });
+    }, { headers: NO_STORE_HEADERS });
 
   } catch (error) {
     console.error('[Login] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500, headers: NO_STORE_HEADERS }
     );
   }
 }

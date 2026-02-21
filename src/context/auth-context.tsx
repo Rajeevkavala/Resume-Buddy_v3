@@ -84,7 +84,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchSession = useCallback(async (): Promise<AppUser | null> => {
     try {
-      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      const res = await fetch('/api/auth/session', {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       if (!res.ok) return null;
       const data = await res.json();
       if (!data.user) return null;
@@ -153,28 +156,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = useCallback(async () => {
     try {
-      if (user) {
-        clearUserData(user.id);
-      }
-
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
-
       startTransition(() => {
         setUser(null);
         setIsAllowed(true);
         setAccessDeniedReason('');
+        setLoading(false);
       });
+
+      if (user) {
+        clearUserData(user.id);
+      }
 
       secureSessionStorage.clear();
       window.dispatchEvent(new CustomEvent('user-logged-out'));
 
-      window.dispatchEvent(new CustomEvent('routeChangeStart'));
-      startTransition(() => {
-        router.push('/login');
-      });
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('routeChangeComplete'));
-      }, 100);
+      router.replace('/login');
+      router.refresh();
+
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
+        keepalive: true,
+      }).catch(() => {});
     } catch {
       // Silently handle sign-out errors
     }
@@ -185,7 +189,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithGoogle = useCallback(async () => {
     try {
       const returnTo = getReturnUrl();
-      const res = await fetch(`/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`, { credentials: 'include' });
+      const res = await fetch(`/api/auth/google?returnTo=${encodeURIComponent(returnTo)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       if (!res.ok) {
         toast.error('Failed to initiate Google sign-in');
         return;
