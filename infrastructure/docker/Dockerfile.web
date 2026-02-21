@@ -42,7 +42,7 @@ COPY . .
 
 # Generate Prisma client if schema exists
 RUN if [ -f "packages/database/prisma/schema.prisma" ]; then \
-      cd packages/database && npx prisma generate; \
+      npx prisma@6.19.2 generate --schema=packages/database/prisma/schema.prisma; \
     fi
 
 # Build the Next.js app
