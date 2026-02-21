@@ -7,7 +7,7 @@
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "npm run db:generate && next build",
-    "build:vercel": "cd packages/database && npx prisma generate && cd ../.. && next build",
+    "build:vercel": "npx prisma generate --schema=packages/database/prisma/schema.prisma && next build",
     "build:analyze": "ANALYZE=true next build",
     "start": "next start",
     "lint": "next lint",
@@ -35,9 +35,9 @@
     "infra:logs": "cd infrastructure/docker && docker compose logs -f",
     "infra:setup": "powershell -ExecutionPolicy Bypass -File infrastructure/scripts/setup.ps1",
     "infra:reset": "cd infrastructure/docker && docker compose down -v && docker compose up -d postgres redis minio",
-    "db:generate": "cd packages/database && npx prisma generate",
-    "db:migrate": "cd packages/database && npx prisma migrate dev",
-    "db:studio": "cd packages/database && npx prisma studio"
+    "db:generate": "npx prisma generate --schema=packages/database/prisma/schema.prisma",
+    "db:migrate": "npx prisma migrate dev --schema=packages/database/prisma/schema.prisma",
+    "db:studio": "npx prisma studio --schema=packages/database/prisma/schema.prisma"
   },
   "dependencies": {
     "@genkit-ai/googleai": "1.19.3",
