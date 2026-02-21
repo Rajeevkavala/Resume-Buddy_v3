@@ -25,10 +25,29 @@ export async function register() {
     }
 
     // ---- Warm up Prisma (establish connection pool) ----
+    // $connect() forces the pool to open at least one connection immediately.
+    // Without this, the pool is lazy — the first request after a cold start pays
+    // the full TCP + TLS + auth handshake cost (~500-1000ms for cloud DBs).
     try {
       const { prisma } = await import('./packages/database/src');
-      await prisma.$queryRaw`SELECT 1`;
+      // Establish pool first, then run a no-op query to confirm connectivity
+      await prisma.$connect();
+      await prisma.$queryRawUnsafe('SELECT 1');
       console.log('[Startup] Database connection pool warmed up ✓');
+
+      // ---- Keep-alive heartbeat ----
+      // Cloud DBs (Supabase, Neon, DigitalOcean) drop idle TCP connections
+      // after ~5 minutes. A lightweight ping every 4 minutes keeps the pool
+      // active so subsequent requests get a warm connection instantly.
+      if (process.env.NODE_ENV === 'production') {
+        setInterval(async () => {
+          try {
+            await prisma.$queryRawUnsafe('SELECT 1');
+          } catch {
+            // Reconnect happens automatically via pool retry strategy
+          }
+        }, 4 * 60 * 1000); // every 4 minutes
+      }
     } catch (err) {
       console.error('[Startup] Database warm-up failed:', err);
     }

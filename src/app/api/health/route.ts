@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getRedisClient } from '@/lib/redis';
 
 interface ServiceStatus {
   status: 'healthy' | 'unhealthy' | 'degraded';
@@ -20,103 +21,138 @@ interface HealthResponse {
   };
 }
 
+// ============ In-memory health cache (10 s) ============
+// Prevents hammering the DB/storage on every scrape or load-balancer probe.
+let _healthCache: { result: HealthResponse; statusCode: number; at: number } | null = null;
+const HEALTH_CACHE_TTL_MS = 10_000; // 10 seconds
+
+// ============ Per-service check helpers ============
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
+async function checkDatabase(): Promise<ServiceStatus> {
+  const start = Date.now();
+  try {
+    // Use a raw query that bypasses Prisma query engine overhead.
+    // Race against a hard 3-second timeout so a slow DB doesn't block everything.
+    await withTimeout(
+      prisma.$queryRawUnsafe<unknown[]>('SELECT 1'),
+      3000,
+      'database'
+    );
+    return { status: 'healthy', latencyMs: Date.now() - start };
+  } catch (err) {
+    return {
+      status: 'unhealthy',
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : 'Database connection failed',
+    };
+  }
+}
+
+async function checkRedis(): Promise<ServiceStatus> {
+  const start = Date.now();
+  try {
+    // Re-use the already-connected singleton — no dynamic import overhead.
+    const redis = getRedisClient();
+    const pong = await withTimeout(redis.ping(), 2000, 'redis');
+    return {
+      status: pong === 'PONG' ? 'healthy' : 'unhealthy',
+      latencyMs: Date.now() - start,
+    };
+  } catch (err) {
+    return {
+      status: 'unhealthy',
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : 'Redis connection failed',
+    };
+  }
+}
+
+async function checkStorage(): Promise<ServiceStatus> {
+  const start = Date.now();
+  try {
+    // Normalise the MINIO_ENDPOINT — it may be "host:port" or "http://host:port"
+    let base = process.env.MINIO_ENDPOINT ?? 'http://localhost:9000';
+    if (!base.startsWith('http')) base = `http://${base}`;
+    // Remove trailing slash
+    base = base.replace(/\/$/, '');
+
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${base}/minio/health/live`, {
+      method: 'HEAD', // lighter than GET — no body transfer
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+    return {
+      status: res.ok ? 'healthy' : 'degraded',
+      latencyMs: Date.now() - start,
+    };
+  } catch (err) {
+    return {
+      status: 'unhealthy',
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : 'MinIO unreachable',
+    };
+  }
+}
+
+async function checkLatex(): Promise<ServiceStatus> {
+  const start = Date.now();
+  try {
+    const latexUrl = (process.env.LATEX_SERVICE_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${latexUrl}/healthz`, {
+      method: 'HEAD',
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+    return {
+      status: res.ok ? 'healthy' : 'degraded',
+      latencyMs: Date.now() - start,
+    };
+  } catch (err) {
+    return {
+      status: 'unhealthy',
+      latencyMs: Date.now() - start,
+      error: err instanceof Error ? err.message : 'LaTeX service unreachable',
+    };
+  }
+}
+
 // ============ GET /api/health ============
 
 export async function GET() {
-  const start = Date.now();
-  const services: HealthResponse['services'] = {
-    database: { status: 'unhealthy' },
-    redis: { status: 'unhealthy' },
-    storage: { status: 'unhealthy' },
-    latex: { status: 'unhealthy' },
-  };
-
-  // 1. Check PostgreSQL
-  try {
-    const dbStart = Date.now();
-    await prisma.$queryRaw`SELECT 1`;
-    services.database = {
-      status: 'healthy',
-      latencyMs: Date.now() - dbStart,
-    };
-  } catch (error) {
-    services.database = {
-      status: 'unhealthy',
-      error: error instanceof Error ? error.message : 'Database connection failed',
-    };
-  }
-
-  // 2. Check Redis
-  try {
-    const redisStart = Date.now();
-    // Dynamic import to avoid breaking if redis isn't configured
-    const { getRedis } = await import('@/lib/auth');
-    const redis = getRedis();
-    const pong = await redis.ping();
-    services.redis = {
-      status: pong === 'PONG' ? 'healthy' : 'unhealthy',
-      latencyMs: Date.now() - redisStart,
-    };
-  } catch (error) {
-    services.redis = {
-      status: 'unhealthy',
-      error: error instanceof Error ? error.message : 'Redis connection failed',
-    };
-  }
-
-  // 3. Check MinIO Storage
-  try {
-    const storageStart = Date.now();
-    const minioEndpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000';
-    const controller2 = new AbortController();
-    const timeoutId2 = setTimeout(() => controller2.abort(), 5000);
-
-    const minioRes = await fetch(`${minioEndpoint}/minio/health/live`, {
-      signal: controller2.signal,
+  // Serve cached result if still fresh
+  if (_healthCache && Date.now() - _healthCache.at < HEALTH_CACHE_TTL_MS) {
+    return NextResponse.json(_healthCache.result, {
+      status: _healthCache.statusCode,
+      headers: { 'X-Health-Cached': 'true' },
     });
-    clearTimeout(timeoutId2);
-
-    services.storage = {
-      status: minioRes.ok ? 'healthy' : 'unhealthy',
-      latencyMs: Date.now() - storageStart,
-    };
-  } catch (error) {
-    services.storage = {
-      status: 'unhealthy',
-      error: error instanceof Error ? error.message : 'MinIO unreachable',
-    };
   }
 
-  // 4. Check LaTeX Service
-  try {
-    const latexStart = Date.now();
-    const latexUrl = process.env.LATEX_SERVICE_URL || 'http://localhost:8080';
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+  // Run ALL four checks in parallel — total time = slowest single check, not sum
+  const [database, redis, storage, latex] = await Promise.all([
+    checkDatabase(),
+    checkRedis(),
+    checkStorage(),
+    checkLatex(),
+  ]);
 
-    const res = await fetch(`${latexUrl}/healthz`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+  const services: HealthResponse['services'] = { database, redis, storage, latex };
 
-    services.latex = {
-      status: res.ok ? 'healthy' : 'unhealthy',
-      latencyMs: Date.now() - latexStart,
-    };
-  } catch (error) {
-    services.latex = {
-      status: 'unhealthy',
-      error: error instanceof Error ? error.message : 'LaTeX service unreachable',
-    };
-  }
-
-  // Determine overall status
   const allStatuses = Object.values(services).map((s) => s.status);
-  const hasUnhealthy = allStatuses.includes('unhealthy');
   const allHealthy = allStatuses.every((s) => s === 'healthy');
 
-  // Database is critical — if it's down, we're unhealthy
-  // Redis/LaTeX can be degraded
   const overallStatus: HealthResponse['status'] =
     services.database.status === 'unhealthy'
       ? 'unhealthy'
@@ -133,6 +169,9 @@ export async function GET() {
   };
 
   const statusCode = overallStatus === 'unhealthy' ? 503 : 200;
+
+  // Cache the result
+  _healthCache = { result: response, statusCode, at: Date.now() };
 
   return NextResponse.json(response, { status: statusCode });
 }
