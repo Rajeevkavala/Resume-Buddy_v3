@@ -2,6 +2,7 @@
   "name": "resumebuddy",
   "version": "2.0.0",
   "private": true,
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
     "dev": "next dev --port 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
