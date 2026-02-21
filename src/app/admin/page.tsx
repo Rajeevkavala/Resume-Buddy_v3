@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getUserStatsAction, getUsageStatsAction, getHistoricalUsageAction } from '@/app/actions/admin';
-import { getSubscriptionStatsAction } from '@/app/actions/admin-subscription';
+import { getAdminDashboardOverviewAction } from '@/app/actions/admin';
 import { 
   Users, 
   UserCheck, 
@@ -69,6 +68,9 @@ interface DashboardStats {
     conversionRate: string;
   };
 }
+
+const DASHBOARD_CACHE_KEY = 'admin_dashboard_stats_v2';
+const DASHBOARD_CACHE_TTL_MS = 30_000;
 
 const chartConfig = {
   requests: {
@@ -161,43 +163,39 @@ export default function AdminDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState<string>('7');
 
-  async function fetchStats(days: number = 7) {
+  async function fetchStats(days: number = 7, force: boolean = false) {
     if (!user?.email) return;
 
+    const cacheKey = `${DASHBOARD_CACHE_KEY}:${user.email}:${days}`;
+
+    if (!force && typeof window !== 'undefined') {
+      try {
+        const rawCache = sessionStorage.getItem(cacheKey);
+        if (rawCache) {
+          const parsed = JSON.parse(rawCache) as { timestamp: number; data: DashboardStats };
+          if (Date.now() - parsed.timestamp < DASHBOARD_CACHE_TTL_MS) {
+            setStats(parsed.data);
+            setLoading(false);
+            setRefreshing(false);
+            return;
+          }
+
+          setStats(parsed.data);
+          setLoading(false);
+        }
+      } catch {
+        // ignore cache parse issues
+      }
+    }
+
     try {
-      const [userStatsResult, usageStatsResult, historicalResult, subscriptionStatsResult] = await Promise.all([
-        getUserStatsAction(user.email),
-        getUsageStatsAction(user.email),
-        getHistoricalUsageAction(user.email, days),
-        getSubscriptionStatsAction(user.email),
-      ]);
+      const result = await getAdminDashboardOverviewAction(user.email, days);
 
-      // Transform historical data based on time range
-      const historicalData = historicalResult.success && Array.isArray(historicalResult.data)
-        ? historicalResult.data
-        : [];
-      const weeklyUsage = historicalData.map((day: { date: string; calls: number; uniqueUsers: number }) => {
-        const date = new Date(day.date);
-        const dayLabel = days <= 7
-          ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]
-          : `${date.getMonth() + 1}/${date.getDate()}`;
-        return {
-          day: dayLabel,
-          requests: day.calls,
-          users: day.uniqueUsers,
-        };
-      });
-
-      if (userStatsResult.success && usageStatsResult.success) {
-        setStats({
-          users: userStatsResult.data!,
-          usage: {
-            totalCalls: usageStatsResult.data!.totalCalls,
-            activeUsers: usageStatsResult.data!.activeUsers,
-          },
-          weeklyUsage,
-          subscriptionStats: subscriptionStatsResult.success ? subscriptionStatsResult.data : undefined,
-        });
+      if (result.success && result.data) {
+        setStats(result.data);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: result.data }));
+        }
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -208,12 +206,12 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => {
-    fetchStats(parseInt(timeRange));
+    fetchStats(parseInt(timeRange), false);
   }, [user?.email, timeRange]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchStats(parseInt(timeRange));
+    fetchStats(parseInt(timeRange), true);
   };
 
   const handleTimeRangeChange = (value: string) => {

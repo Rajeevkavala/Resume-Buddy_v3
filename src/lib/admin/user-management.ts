@@ -25,7 +25,7 @@ export async function getAllUsers(): Promise<UserData[]> {
       orderBy: { createdAt: 'desc' },
     });
 
-    const [dailyUsage, monthlyUsage, totalUsage, providerStats] = await Promise.all([
+    const [dailyUsage, monthlyUsage, totalUsage] = await Promise.all([
       prisma.usageRecord.groupBy({
         by: ['userId'],
         where: { date: todayStart },
@@ -40,11 +40,6 @@ export async function getAllUsers(): Promise<UserData[]> {
         by: ['userId'],
         _sum: { count: true },
       }),
-      prisma.apiCallLog.groupBy({
-        by: ['userId', 'provider'],
-        _count: true,
-        _sum: { tokensUsed: true },
-      }),
     ]);
 
     const dailyMap = new Map<string, number>(
@@ -57,25 +52,11 @@ export async function getAllUsers(): Promise<UserData[]> {
       totalUsage.map((row) => [row.userId, row._sum.count ?? 0]),
     );
 
-    const byProviderMap = new Map<string, NonNullable<UserData['apiUsage']>['byProvider']>();
-    for (const row of providerStats) {
-      const current = byProviderMap.get(row.userId) || {};
-      if (row.provider === 'groq' || row.provider === 'gemini' || row.provider === 'openrouter') {
-        current[row.provider] = {
-          calls: row._count,
-          tokens: row._sum.tokensUsed ?? 0,
-          cost: 0,
-        };
-      }
-      byProviderMap.set(row.userId, current);
-    }
-
     return users.map((u) =>
       mapUserToUserData(u, {
         dailyCount: dailyMap.get(u.id) ?? 0,
         monthlyCount: monthlyMap.get(u.id) ?? 0,
         totalCount: totalMap.get(u.id) ?? 0,
-        byProvider: byProviderMap.get(u.id),
       }),
     );
   } catch (error) {

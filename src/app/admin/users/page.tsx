@@ -63,6 +63,9 @@ import type { UserData, DeleteUserOptions } from '@/types/admin';
 import { Search, RefreshCw, Trash2, AlertTriangle, Download, UserPlus, Upload, Users, MoreHorizontal, Crown, Calendar, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
+const USERS_CACHE_KEY = 'admin_users_list_v1';
+const USERS_CACHE_TTL_MS = 30_000;
+
 // Skeleton loading component
 function UsersSkeleton() {
   return (
@@ -233,16 +236,40 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   useEffect(() => {
-    fetchUsers();
+    fetchUsers(false);
   }, [user?.email]);
 
-  async function fetchUsers() {
+  async function fetchUsers(force: boolean = false) {
     if (!user?.email) return;
+
+    const cacheKey = `${USERS_CACHE_KEY}:${user.email}`;
+
+    if (!force && typeof window !== 'undefined') {
+      try {
+        const rawCache = sessionStorage.getItem(cacheKey);
+        if (rawCache) {
+          const parsed = JSON.parse(rawCache) as { timestamp: number; data: UserData[] };
+          if (Date.now() - parsed.timestamp < USERS_CACHE_TTL_MS) {
+            setUsers(parsed.data);
+            setLoading(false);
+            return;
+          }
+
+          setUsers(parsed.data);
+          setLoading(false);
+        }
+      } catch {
+        // ignore cache parse issues
+      }
+    }
     
     try {
       const result = await getAllUsersAction(user.email);
       if (result.success && result.data) {
         setUsers(result.data);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(cacheKey, JSON.stringify({ timestamp: Date.now(), data: result.data }));
+        }
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -259,7 +286,7 @@ export default function UsersPage() {
       const result = await adminUpgradeUserToProAction(user.email, userId, 30, 'Upgraded from users page');
       if (result.success) {
         toast.success(`Upgraded ${email} to Pro`);
-        await fetchUsers();
+        await fetchUsers(true);
       } else {
         toast.error(result.message);
       }
@@ -295,7 +322,7 @@ export default function UsersPage() {
         toast.success(result.message);
         setCsvContent('');
         setIsBulkImportDialogOpen(false);
-        await fetchUsers();
+        await fetchUsers(true);
       } else {
         toast.error(result.message);
       }
@@ -317,7 +344,7 @@ export default function UsersPage() {
       if (result.success) {
         toast.success(result.message);
         setSelectedUsers([]);
-        await fetchUsers();
+        await fetchUsers(true);
       } else {
         toast.error(result.message);
       }
@@ -348,7 +375,7 @@ export default function UsersPage() {
     try {
       const result = await resetUserUsageAction(uid, user.email, type);
       if (result.success) {
-        await fetchUsers();
+        await fetchUsers(true);
         toast.success(`Reset ${type} usage successfully`);
       } else {
         toast.error(result.message);
@@ -388,7 +415,7 @@ export default function UsersPage() {
       
       if (result.success) {
         setIsDeleteDialogOpen(false);
-        await fetchUsers();
+        await fetchUsers(true);
         toast.success(result.message);
       } else {
         toast.error(result.message);
@@ -415,7 +442,7 @@ export default function UsersPage() {
       
       if (result.success) {
         setSelectedUsers([]);
-        await fetchUsers();
+        await fetchUsers(true);
         toast.success(`Deleted ${result.results.success.length} users. ${result.results.failed.length} failed.`);
       } else {
         toast.error('Bulk delete operation failed');

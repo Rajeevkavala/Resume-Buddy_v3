@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { 
   LayoutDashboard, 
@@ -23,7 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/context/auth-context';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard, badge: null },
@@ -41,8 +41,16 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ onNavigate }: AdminSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    for (const item of navigation) {
+      router.prefetch(item.href);
+    }
+    router.prefetch('/dashboard');
+  }, [router]);
 
   return (
     <TooltipProvider delayDuration={0}>

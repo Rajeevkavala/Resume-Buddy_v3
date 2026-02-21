@@ -42,6 +42,33 @@ import {
   deleteOldApiUsageLogs,
   getApiUsageLogCount,
 } from '@/lib/admin/api-usage-tracking';
+import { prisma } from '@/lib/db';
+
+const DASHBOARD_CACHE_TTL_MS = 20_000;
+const dashboardCache = new Map<string, {
+  expiresAt: number;
+  data: {
+    users: {
+      totalUsers: number;
+      activeUsers: number;
+      blockedUsers: number;
+      adminUsers: number;
+    };
+    usage: {
+      totalCalls: number;
+      activeUsers: number;
+    };
+    weeklyUsage: Array<{ day: string; requests: number; users: number }>;
+    subscriptionStats: {
+      totalUsers: number;
+      proUsers: number;
+      freeUsers: number;
+      expiringSoon: number;
+      totalRevenue: number;
+      conversionRate: string;
+    };
+  };
+}>();
 
 // ============================================================
 // Admin Verification
@@ -579,6 +606,110 @@ export async function getHistoricalUsageAction(
     return { success: true, data };
   } catch (error) {
     console.error('Error in getHistoricalUsageAction:', error);
+    return { success: false, data: null };
+  }
+}
+
+export async function getAdminDashboardOverviewAction(
+  adminEmail: string,
+  days: number = 7
+): Promise<{
+  success: boolean;
+  data: {
+    users: {
+      totalUsers: number;
+      activeUsers: number;
+      blockedUsers: number;
+      adminUsers: number;
+    };
+    usage: {
+      totalCalls: number;
+      activeUsers: number;
+    };
+    weeklyUsage: Array<{ day: string; requests: number; users: number }>;
+    subscriptionStats: {
+      totalUsers: number;
+      proUsers: number;
+      freeUsers: number;
+      expiringSoon: number;
+      totalRevenue: number;
+      conversionRate: string;
+    };
+  } | null;
+}> {
+  try {
+    const normalizedDays = Math.max(1, Math.min(90, days));
+    const cacheKey = `${adminEmail.toLowerCase()}:${normalizedDays}`;
+    const cached = dashboardCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+      return { success: true, data: cached.data };
+    }
+
+    const adminCheck = await isAdmin(adminEmail);
+    if (!adminCheck) {
+      return { success: false, data: null };
+    }
+
+    const now = new Date();
+    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const [userStats, usageStats, historicalData, totalUsers, proSubs, expiringSoonSubs, revenueAgg] = await Promise.all([
+      getUserStats(),
+      getAggregatedUsageStats(),
+      getHistoricalUsageData(normalizedDays),
+      prisma.user.count(),
+      prisma.subscription.count({
+        where: { tier: 'PRO', status: 'ACTIVE', currentPeriodEnd: { gt: now } },
+      }),
+      prisma.subscription.count({
+        where: { tier: 'PRO', status: 'ACTIVE', currentPeriodEnd: { gt: now, lte: sevenDaysLater } },
+      }),
+      prisma.payment.aggregate({
+        where: { status: 'COMPLETED' },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    const weeklyUsage = historicalData.map((day) => {
+      const date = new Date(day.date);
+      const dayLabel = normalizedDays <= 7
+        ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]
+        : `${date.getMonth() + 1}/${date.getDate()}`;
+      return {
+        day: dayLabel,
+        requests: day.calls,
+        users: day.uniqueUsers,
+      };
+    });
+
+    const totalRevenue = Number(revenueAgg._sum.amount ?? 0) / 100;
+
+    const data = {
+      users: userStats,
+      usage: {
+        totalCalls: usageStats.totalCalls,
+        activeUsers: usageStats.activeUsers,
+      },
+      weeklyUsage,
+      subscriptionStats: {
+        totalUsers,
+        proUsers: proSubs,
+        freeUsers: totalUsers - proSubs,
+        expiringSoon: expiringSoonSubs,
+        totalRevenue,
+        conversionRate: totalUsers > 0 ? ((proSubs / totalUsers) * 100).toFixed(1) : '0',
+      },
+    };
+
+    dashboardCache.set(cacheKey, {
+      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+      data,
+    });
+
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error in getAdminDashboardOverviewAction:', error);
     return { success: false, data: null };
   }
 }
