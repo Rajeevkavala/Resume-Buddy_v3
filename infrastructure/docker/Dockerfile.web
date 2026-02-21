@@ -48,7 +48,7 @@ RUN if [ -f "packages/database/prisma/schema.prisma" ]; then \
 # Build the Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-RUN pnpm run build || npx next build
+RUN pnpm run build || npx next build --webpack
 
 # ---- Stage 3: Runner ----
 FROM node:20-alpine AS runner

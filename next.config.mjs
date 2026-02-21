@@ -16,9 +16,6 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   
   // Standalone output for Docker deployments only (not Vercel)
   // Vercel handles this automatically
@@ -27,11 +24,11 @@ const nextConfig = {
   // Disable X-Powered-By header for security
   poweredByHeader: false,
   
-  // Enable SWC minification for better performance
-  swcMinify: true,
-  
   // Optimize production builds
   productionBrowserSourceMaps: false,
+
+  // External server packages used by server components/routes
+  serverExternalPackages: ['pdf-parse-fork'],
   
   // Enable compression
   compress: true,
@@ -58,8 +55,6 @@ const nextConfig = {
     ],
     // Enable aggressive page static optimization
     optimizeCss: true,
-    // Improve route prefetching
-    serverComponentsExternalPackages: ['pdf-parse-fork'],
     // Optimize server actions
     serverActions: {
       bodySizeLimit: '2mb',
@@ -68,7 +63,7 @@ const nextConfig = {
 
   // Webpack optimization for better bundle splitting and caching
   webpack: (config, { isServer, dev }) => {
-    if (!dev) {
+    if (!dev && !isServer) {
       // Optimize bundle splitting for production
       config.optimization = {
         ...config.optimization,
