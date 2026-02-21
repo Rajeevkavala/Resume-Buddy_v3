@@ -45,7 +45,7 @@ export function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: https: blob:",
-    "connect-src 'self' https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com",
+    "connect-src 'self' https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com https://www.resume-buddy.tech https://resume-buddy-v3.vercel.app http://165.232.181.37:8080 http://165.232.181.37:9000",
     "frame-src https://accounts.google.com https://checkout.razorpay.com https://api.razorpay.com",
     "object-src 'none'",
     "base-uri 'self'",
@@ -55,7 +55,8 @@ export function middleware(request: NextRequest) {
   response.headers.set('Content-Security-Policy', csp);
 
   // Check for authentication cookie (new JWT auth system)
-  const authCookie = request.cookies.get('rb_session');
+  const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'rb_session';
+  const authCookie = request.cookies.get(sessionCookieName);
   const isAuthenticated = !!authCookie?.value;
 
   // Allow public routes
