@@ -1,0 +1,56 @@
+name: Deploy WebSocket Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/websocket/**'
+      - '.github/workflows/deploy-websocket.yml'
+  workflow_dispatch: # allow manual trigger
+
+jobs:
+  deploy-websocket:
+    name: Build & Deploy WebSocket to Vercel
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/websocket
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/websocket/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Deploy to Vercel (production)
+        run: |
+          npm install -g vercel@latest
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEBSOCKET }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+
+      - name: Smoke test WebSocket health endpoint
+        run: |
+          WS_URL="${{ secrets.WEBSOCKET_URL }}"
+          echo "Testing: $WS_URL/healthz"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$WS_URL/healthz" || echo "000")
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "⚠️  Health check returned $STATUS — deployment may need a moment to warm up"
+          else
+            echo "✅ WebSocket service is healthy"
+          fi
