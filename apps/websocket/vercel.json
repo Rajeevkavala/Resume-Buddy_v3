@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/server.ts",
+      "use": "@vercel/node",
+      "config": { "maxLambdaSize": "50mb" }
+    }
+  ],
+  "routes": [
+    { "src": "/socket.io/(.*)", "dest": "src/server.ts" },
+    { "src": "/(.*)", "dest": "src/server.ts" }
+  ]
+}
