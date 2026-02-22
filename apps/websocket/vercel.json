@@ -1,14 +1,17 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "src/server.ts",
-      "use": "@vercel/node",
-      "config": { "maxLambdaSize": "50mb" }
+  "installCommand": "npm install --legacy-peer-deps --workspaces=false --include=dev && npm install socket.io ioredis @socket.io/redis-adapter --save --workspaces=false",
+  "buildCommand": "echo \"skip custom build\"",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 300
     }
-  ],
+  },
   "routes": [
-    { "src": "/socket.io/(.*)", "dest": "src/server.ts" },
-    { "src": "/(.*)", "dest": "src/server.ts" }
+    { "src": "/socket.io/(.*)", "dest": "/api/index.js" },
+    { "src": "/healthz", "dest": "/api/index.js" },
+    { "src": "/health", "dest": "/api/index.js" },
+    { "src": "/metrics", "dest": "/api/index.js" },
+    { "src": "/(.*)", "dest": "/api/index.js" }
   ]
 }
