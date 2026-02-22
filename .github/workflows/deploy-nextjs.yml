@@ -1,0 +1,176 @@
+name: Deploy — Next.js → Vercel
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'services/resume-latex-service/**'
+      - 'apps/websocket/**'
+      - 'docs/**'
+      - '*.md'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options: [production, preview]
+
+concurrency:
+  group: deploy-vercel-${{ github.ref }}
+  cancel-in-progress: false   # never cancel an in-flight production deploy
+
+env:
+  NODE_VERSION: '20'
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Gate: only deploy after CI passes
+  # ──────────────────────────────────────────────
+  ci-gate:
+    name: CI Gate
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  # ──────────────────────────────────────────────
+  # DB Migrations (Supabase / production Postgres)
+  # ──────────────────────────────────────────────
+  migrate:
+    name: DB Migrations (Supabase)
+    runs-on: ubuntu-latest
+    needs: ci-gate
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Deploy Prisma migrations → Supabase
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npx prisma migrate deploy --schema=packages/database/prisma/schema.prisma
+          echo "✅ Database migrations complete"
+
+  # ──────────────────────────────────────────────
+  # Deploy Next.js → Vercel Production
+  # ──────────────────────────────────────────────
+  deploy-nextjs:
+    name: Deploy Next.js → Vercel
+    runs-on: ubuntu-latest
+    needs: migrate
+    environment: production
+    outputs:
+      deployment-url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build project (Vercel artefacts)
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          # Supabase PostgreSQL
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Upstash Redis
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          # Auth secrets
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          # MinIO on DigitalOcean
+          MINIO_ENDPOINT: ${{ secrets.MINIO_ENDPOINT }}
+          MINIO_PORT: ${{ secrets.MINIO_PORT }}
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+          MINIO_USE_SSL: ${{ secrets.MINIO_USE_SSL }}
+          MINIO_BUCKET: ${{ secrets.MINIO_BUCKET }}
+          # LaTeX service on DigitalOcean
+          LATEX_SERVICE_URL: ${{ secrets.LATEX_SERVICE_URL }}
+          # WebSocket service on Vercel
+          WEBSOCKET_URL: ${{ secrets.WEBSOCKET_URL }}
+          # AI providers
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Payments
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+          # OAuth
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+          # Email
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          # Public
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+          NODE_ENV: production
+
+      - name: Deploy to Vercel (production)
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> $GITHUB_OUTPUT
+          echo "✅ Deployed to: $url"
+
+      - name: Comment deployment URL on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 **Next.js deployed to Vercel**\n\n🔗 ${{ steps.deploy.outputs.url }}`
+            })
+
+  # ──────────────────────────────────────────────
+  # Smoke test after deploy
+  # ──────────────────────────────────────────────
+  smoke-test:
+    name: Post-Deploy Smoke Test
+    runs-on: ubuntu-latest
+    needs: deploy-nextjs
+    steps:
+      - name: Health check — App
+        run: |
+          APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}"
+          echo "Testing: $APP_URL"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/api/auth/status" || echo "000")
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ]; then
+              echo "✅ App responding (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "⏳ Attempt $i failed (HTTP $STATUS) — retrying in 10s..."
+            sleep 10
+          done
+          echo "❌ Smoke test failed after 5 attempts"
+          exit 1

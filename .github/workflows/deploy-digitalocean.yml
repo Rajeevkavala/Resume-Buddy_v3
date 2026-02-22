@@ -1,0 +1,242 @@
+name: Deploy — LaTeX + MinIO → DigitalOcean
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/resume-latex-service/**'
+      - '.github/workflows/deploy-digitalocean.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_minio:
+        description: 'Also setup / restart MinIO?'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: deploy-do-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: registry.digitalocean.com
+  DO_REGISTRY: ${{ secrets.DO_REGISTRY_NAME }}
+  IMAGE_NAME: resume-latex-service
+  TECTONIC_VERSION: '0.15.0'
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Build & push Docker image → DO Container Registry
+  # ──────────────────────────────────────────────
+  build-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      short-sha: ${{ steps.vars.outputs.sha_short }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set short SHA
+        id: vars
+        run: echo "sha_short=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Install doctl (DigitalOcean CLI)
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_ACCESS_TOKEN }}
+
+      - name: Log in to DO Container Registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: services/resume-latex-service
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            TECTONIC_VERSION=${{ env.TECTONIC_VERSION }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+  # ──────────────────────────────────────────────
+  # 2. Deploy LaTeX service via SSH to DigitalOcean Droplet
+  # ──────────────────────────────────────────────
+  deploy-latex:
+    name: Deploy LaTeX Service → Droplet
+    runs-on: ubuntu-latest
+    needs: build-push
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_ACCESS_TOKEN }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_DROPLET_IP }}
+          username: ${{ secrets.DO_SSH_USER }}
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DO_SSH_PORT || 22 }}
+          timeout: 120s
+          script: |
+            set -e
+            echo "🔑 Authenticating with DO Registry..."
+            doctl registry login --expiry-seconds 300 \
+              --access-token "${{ secrets.DO_ACCESS_TOKEN }}"
+
+            REGISTRY="${{ env.REGISTRY }}/${{ env.DO_REGISTRY }}/${{ env.IMAGE_NAME }}"
+            IMAGE="$REGISTRY:latest"
+
+            echo "📦 Pulling latest image: $IMAGE"
+            docker pull "$IMAGE"
+
+            echo "🛑 Stopping old container (if exists)..."
+            docker stop latex-service 2>/dev/null || true
+            docker rm   latex-service 2>/dev/null || true
+
+            echo "🚀 Starting new container..."
+            docker run -d \
+              --name latex-service \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              -m 1536m \
+              --cpus 1.5 \
+              -e NODE_ENV=production \
+              -e PORT=8080 \
+              -e HOST=0.0.0.0 \
+              -e LOG_LEVEL=warn \
+              --log-driver json-file \
+              --log-opt max-size=50m \
+              --log-opt max-file=3 \
+              "$IMAGE"
+
+            echo "⏳ Waiting for health check..."
+            for i in $(seq 1 12); do
+              STATUS=$(curl -sf "http://localhost:8080/healthz" 2>/dev/null \
+                && echo "ok" || echo "fail")
+              if [ "$STATUS" = "ok" ]; then
+                echo "✅ LaTeX service healthy after ${i}0s"
+                break
+              fi
+              if [ $i -eq 12 ]; then
+                echo "❌ Health check timed out"
+                docker logs latex-service --tail 50
+                exit 1
+              fi
+              sleep 10
+            done
+
+            echo "🧹 Pruning dangling images..."
+            docker image prune -f
+
+  # ──────────────────────────────────────────────
+  # 3. Setup / restart MinIO on same Droplet
+  # ──────────────────────────────────────────────
+  deploy-minio:
+    name: Deploy MinIO → Droplet
+    runs-on: ubuntu-latest
+    needs: deploy-latex
+    environment: production
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.deploy_minio == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload MinIO compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DO_DROPLET_IP }}
+          username: ${{ secrets.DO_SSH_USER }}
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DO_SSH_PORT || 22 }}
+          source: infrastructure/digitalocean/minio-compose.yml
+          target: /opt/resumebuddy/
+
+      - name: Start / restart MinIO
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_DROPLET_IP }}
+          username: ${{ secrets.DO_SSH_USER }}
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.DO_SSH_PORT || 22 }}
+          script: |
+            set -e
+            cd /opt/resumebuddy
+
+            # Write env file for compose
+            cat > .env.minio <<EOF
+            MINIO_ROOT_USER=${{ secrets.MINIO_ACCESS_KEY }}
+            MINIO_ROOT_PASSWORD=${{ secrets.MINIO_SECRET_KEY }}
+            MINIO_BUCKET=${{ secrets.MINIO_BUCKET || 'resumebuddy' }}
+            EOF
+
+            docker compose -f minio-compose.yml --env-file .env.minio up -d --pull always
+            echo "✅ MinIO started"
+
+            # Health check
+            sleep 10
+            HEALTH=$(curl -sf http://localhost:9000/minio/health/live && echo "ok" || echo "fail")
+            echo "MinIO health: $HEALTH"
+            if [ "$HEALTH" != "ok" ]; then
+              docker compose -f minio-compose.yml logs minio --tail 30
+              exit 1
+            fi
+
+  # ──────────────────────────────────────────────
+  # 4. Post-deploy smoke test
+  # ──────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test — LaTeX Service
+    runs-on: ubuntu-latest
+    needs: deploy-latex
+    environment: production
+
+    steps:
+      - name: LaTeX /healthz
+        run: |
+          LATEX_URL="${{ secrets.LATEX_SERVICE_URL }}"
+          echo "Checking: $LATEX_URL/healthz"
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$LATEX_URL/healthz" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ LaTeX service healthy (HTTP $STATUS)"
+              exit 0
+            fi
+            echo "⏳ Retry $i — HTTP $STATUS"
+            sleep 15
+          done
+          echo "❌ LaTeX service health check failed"
+          exit 1
+
+      - name: /metrics endpoint
+        run: |
+          LATEX_URL="${{ secrets.LATEX_SERVICE_URL }}"
+          curl -sf "$LATEX_URL/metrics" | head -20

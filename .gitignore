@@ -42,6 +42,11 @@ next-env.d.ts
 .genkit/*
 .env*
 !.env.template
+!.env.production.example
+
+# infrastructure secret env files (never commit)
+infrastructure/digitalocean/.env*
+/opt/resumebuddy/.env*
 
 # firebase
 firebase-debug.log

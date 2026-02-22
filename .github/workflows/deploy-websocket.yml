@@ -1,0 +1,77 @@
+name: Deploy — WebSocket → Vercel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/websocket/**'
+      - '.github/workflows/deploy-websocket.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-websocket-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID_WS: ${{ secrets.VERCEL_PROJECT_ID_WEBSOCKET }}
+
+jobs:
+  deploy-websocket:
+    name: Deploy WebSocket → Vercel
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: apps/websocket
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: apps/websocket/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment (WebSocket project)
+        run: |
+          vercel pull --yes --environment=production \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --scope=${{ secrets.VERCEL_ORG_ID }}
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEBSOCKET }}
+
+      - name: Deploy WebSocket to Vercel
+        run: |
+          url=$(vercel deploy --prod \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --scope=${{ secrets.VERCEL_ORG_ID }} \
+            --env REDIS_URL="${{ secrets.REDIS_URL }}" \
+            --env REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}" \
+            --env JWT_ACCESS_SECRET="${{ secrets.JWT_ACCESS_SECRET }}" \
+            --env SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+            --env NEXT_PUBLIC_APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}" \
+            --env NODE_ENV="production")
+          echo "✅ WebSocket deployed: $url"
+          echo "WEBSOCKET_URL=$url" >> $GITHUB_ENV
+        env:
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEBSOCKET }}
+
+      - name: Smoke test WebSocket
+        run: |
+          sleep 5
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$WEBSOCKET_URL" || echo "000")
+          echo "WebSocket service status: HTTP $STATUS"

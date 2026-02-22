@@ -1,0 +1,89 @@
+# =============================================================
+# DigitalOcean App Platform — LaTeX Service Spec
+# =============================================================
+# Deploy with:
+#   doctl apps create --spec infrastructure/digitalocean/do-app-spec.yaml
+# Update with:
+#   doctl apps update <app-id> --spec infrastructure/digitalocean/do-app-spec.yaml
+# =============================================================
+
+name: resumebuddy-latex-service
+region: nyc
+
+services:
+  - name: latex-service
+    # ── Source: DO Container Registry ──────────────────────────
+    image:
+      registry_type: DOCR
+      registry: YOUR_DO_REGISTRY_NAME        # replace with your DO registry name
+      repository: resume-latex-service
+      tag: latest
+      deploy_on_push:
+        enabled: true
+
+    # ── Runtime ────────────────────────────────────────────────
+    instance_size_slug: professional-xs      # 1 vCPU, 2 GB RAM ($12/mo)
+    instance_count: 1
+
+    # ── Network ────────────────────────────────────────────────
+    http_port: 8080
+    internal_ports: []
+
+    # ── Health check ────────────────────────────────────────────
+    health_check:
+      http_path: /healthz
+      initial_delay_seconds: 60             # tectonic warm-up takes ~45s
+      period_seconds: 30
+      timeout_seconds: 10
+      failure_threshold: 3
+      success_threshold: 1
+
+    # ── Environment ─────────────────────────────────────────────
+    envs:
+      - key: NODE_ENV
+        value: production
+        scope: RUN_TIME
+
+      - key: PORT
+        value: "8080"
+        scope: RUN_TIME
+
+      - key: HOST
+        value: "0.0.0.0"
+        scope: RUN_TIME
+
+      - key: LOG_LEVEL
+        value: warn
+        scope: RUN_TIME
+
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=1280"
+        scope: RUN_TIME
+
+    # ── Resource limits ──────────────────────────────────────────
+    # Managed by instance_size_slug above
+
+    # ── Routes ──────────────────────────────────────────────────
+    routes:
+      - path: /
+        preserve_path_prefix: false
+
+    # ── Alerts ──────────────────────────────────────────────────
+    alerts:
+      - rule: CPU_UTILIZATION
+        value: 80
+        operator: GREATER_THAN
+        window: FIVE_MINUTES
+        disabled: false
+
+      - rule: MEM_UTILIZATION
+        value: 85
+        operator: GREATER_THAN
+        window: FIVE_MINUTES
+        disabled: false
+
+      - rule: RESTART_COUNT
+        value: 3
+        operator: GREATER_THAN
+        window: FIVE_MINUTES
+        disabled: false

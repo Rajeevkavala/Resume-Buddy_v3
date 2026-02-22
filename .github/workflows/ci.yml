@@ -1,0 +1,186 @@
+name: CI — Lint · Typecheck · Test
+
+on:
+  push:
+    branches: [main, develop, 'feature/**', 'fix/**']
+  pull_request:
+    branches: [main, develop]
+  # Allow this workflow to be called from other workflows (e.g. deploy-nextjs.yml)
+  workflow_call:
+    secrets:
+      GROQ_API_KEY_TEST:
+        required: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Lint + Typecheck (fast feedback)
+  # ──────────────────────────────────────────────
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --include=dev
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+      - name: Typecheck (Next.js app)
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+  # ──────────────────────────────────────────────
+  # 2. Unit + Integration Tests
+  # ──────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: lint-typecheck
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: resumebuddy_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: resumebuddy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://resumebuddy_test:test_password@localhost:5432/resumebuddy_test
+      REDIS_URL: redis://localhost:6379
+      REDIS_PASSWORD: ''
+      JWT_ACCESS_SECRET: test-access-secret-32-chars-minimum
+      JWT_REFRESH_SECRET: test-refresh-secret-32-chars-minimum
+      SESSION_SECRET: test-session-secret-32-chars-min
+      NODE_ENV: test
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY_TEST || 'gsk_test_placeholder' }}
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: '9000'
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_USE_SSL: 'false'
+      MINIO_BUCKET: resumebuddy-test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --include=dev
+
+      - name: Generate Prisma client
+        run: npx prisma generate --schema=packages/database/prisma/schema.prisma
+
+      - name: Run DB migrations (test DB)
+        run: npx prisma migrate deploy --schema=packages/database/prisma/schema.prisma
+
+      - name: Run unit tests
+        run: npm run test
+
+  # ──────────────────────────────────────────────
+  # 3. Build verification
+  # ──────────────────────────────────────────────
+  build-check:
+    name: Build Check
+    runs-on: ubuntu-latest
+    needs: lint-typecheck
+    env:
+      # Minimal env to satisfy build-time checks
+      DATABASE_URL: postgresql://test:test@localhost:5432/test
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: build-check-dummy-secret-32-chars
+      JWT_REFRESH_SECRET: build-check-dummy-secret-32-chars
+      SESSION_SECRET: build-check-dummy-session-secret-32
+      NEXT_PUBLIC_APP_URL: https://resume-buddy-v3.vercel.app
+      NODE_ENV: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --include=dev
+
+      - name: Build Next.js (Vercel mode)
+        run: npm run build:vercel
+
+  # ──────────────────────────────────────────────
+  # 4. LaTeX Service build check
+  # ──────────────────────────────────────────────
+  latex-build-check:
+    name: LaTeX Service Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/resume-latex-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: services/resume-latex-service/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Docker build (dry-run / no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: services/resume-latex-service
+          push: false
+          tags: resume-latex-service:ci-check

@@ -1,0 +1,82 @@
+# ============================================================
+# MinIO — Standalone Object Storage on DigitalOcean Droplet
+# ============================================================
+# Usage:
+#   docker compose -f minio-compose.yml --env-file .env.minio up -d
+#
+# Required .env.minio keys:
+#   MINIO_ROOT_USER     - Access key ID
+#   MINIO_ROOT_PASSWORD - Secret key
+#   MINIO_BUCKET        - Default bucket name (e.g. resumebuddy)
+# ============================================================
+
+version: '3.9'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: resumebuddy-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Enable server-side encryption
+      MINIO_SITE_NAME: resumebuddy-storage
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # S3-compatible API
+      - "9001:9001"   # Web console
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ── MinIO bucket initializer (runs once, exits) ──────────────
+  minio-setup:
+    image: minio/mc:latest
+    container_name: resumebuddy-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        set -e
+        echo 'Configuring MinIO...'
+        mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}
+
+        # Create the default bucket if not present
+        mc mb local/$${MINIO_BUCKET:-resumebuddy} --ignore-existing
+        echo 'Bucket created: '$${MINIO_BUCKET:-resumebuddy}
+
+        # Create public/ prefix policy (read-only public access for generated files)
+        mc anonymous set download local/$${MINIO_BUCKET:-resumebuddy}/public
+
+        # Lifecycle rule: auto-delete temp files after 7 days
+        mc ilm rule add local/$${MINIO_BUCKET:-resumebuddy} \
+          --prefix 'tmp/' \
+          --expire-days 7 \
+          --id 'cleanup-tmp' || true
+
+        echo '✅ MinIO setup complete'
+      "
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-resumebuddy}
+
+volumes:
+  minio_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/resumebuddy/minio-data
