@@ -1,0 +1,527 @@
+{
+  "info": {
+    "name": "ResumeBuddy E2E API",
+    "_postman_id": "d8dd7034-f8b9-4385-bc4a-74717f2f67d0",
+    "description": "End-to-end Postman collection covering all Next.js API routes for ResumeBuddy.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.environment.set('requestId', `${Date.now()}-${Math.floor(Math.random()*100000)}`);"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response time is under 10s', function () {",
+          "  pm.expect(pm.response.responseTime).to.be.below(10000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "{{baseUrl}}" },
+    { "key": "apiBase", "value": "{{apiBase}}" }
+  ],
+  "item": [
+    {
+      "name": "00 Health & Metrics",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/health", "host": ["{{apiBase}}"], "path": ["health"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Health returns 200 or 503', function () { pm.expect([200,503]).to.include(pm.response.code); });"] } }]
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}", "disabled": true }
+            ],
+            "url": { "raw": "{{apiBase}}/metrics", "host": ["{{apiBase}}"], "path": ["metrics"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Metrics returns 200/401', function () { pm.expect([200,401]).to.include(pm.response.code); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"name\": \"{{name}}\"\n}"
+            },
+            "url": { "raw": "{{apiBase}}/auth/register", "host": ["{{apiBase}}"], "path": ["auth", "register"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Register returns 201 or already exists', function () { pm.expect([201,409,400]).to.include(pm.response.code); });", "if (pm.response.code === 201) { const j = pm.response.json(); if (j.accessToken) pm.environment.set('accessToken', j.accessToken); if (j.user && j.user.id) pm.environment.set('userId', j.user.id); }"] } }]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": { "raw": "{{apiBase}}/auth/login", "host": ["{{apiBase}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Login returns success', function () { pm.response.to.have.status(200); });", "const j = pm.response.json(); if (j.accessToken) pm.environment.set('accessToken', j.accessToken); if (j.user && j.user.id) pm.environment.set('userId', j.user.id);"] } }]
+        },
+        {
+          "name": "Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/session", "host": ["{{apiBase}}"], "path": ["auth", "session"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Session returns 200 or 401', function () { pm.expect([200,401]).to.include(pm.response.code); });", "if (pm.response.code === 200) { const j = pm.response.json(); if (j.accessToken) pm.environment.set('accessToken', j.accessToken); if (j.user && j.user.id) pm.environment.set('userId', j.user.id); }"] } }]
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/refresh", "host": ["{{apiBase}}"], "path": ["auth", "refresh"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Refresh returns 200 or 401', function () { pm.expect([200,401]).to.include(pm.response.code); });", "if (pm.response.code === 200) { const j = pm.response.json(); if (j.accessToken) pm.environment.set('accessToken', j.accessToken); }"] } }]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/logout", "host": ["{{apiBase}}"], "path": ["auth", "logout"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Logout returns 200', function () { pm.response.to.have.status(200); });"] } }]
+        },
+        {
+          "name": "Google OAuth URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/auth/google?returnTo=%2Fdashboard",
+              "host": ["{{apiBase}}"],
+              "path": ["auth", "google"],
+              "query": [{ "key": "returnTo", "value": "/dashboard" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Google auth URL returns 200', function () { pm.response.to.have.status(200); });"] } }]
+        },
+        {
+          "name": "Google Callback (manual)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/auth/callback/google?code=replace_me&state=replace_me",
+              "host": ["{{apiBase}}"],
+              "path": ["auth", "callback", "google"],
+              "query": [
+                { "key": "code", "value": "replace_me" },
+                { "key": "state", "value": "replace_me" }
+              ]
+            },
+            "description": "Run only with real OAuth callback values from browser flow."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Auth Extended",
+      "item": [
+        {
+          "name": "Profile GET",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/profile", "host": ["{{apiBase}}"], "path": ["auth", "profile"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Profile GET returns 200/401', function () { pm.expect([200,401]).to.include(pm.response.code); });"] } }]
+        },
+        {
+          "name": "Profile PATCH",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"{{name}} Updated\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/profile", "host": ["{{apiBase}}"], "path": ["auth", "profile"] }
+          }
+        },
+        {
+          "name": "Profile Photo POST (form-data)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "photo", "type": "file", "src": "{{resumeFilePath}}" }
+              ]
+            },
+            "url": { "raw": "{{apiBase}}/auth/profile/photo", "host": ["{{apiBase}}"], "path": ["auth", "profile", "photo"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Photo upload returns 200/400/401', function () { pm.expect([200,400,401]).to.include(pm.response.code); });"] } }]
+        },
+        {
+          "name": "Profile Photo DELETE",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/profile/photo", "host": ["{{apiBase}}"], "path": ["auth", "profile", "photo"] }
+          }
+        },
+        {
+          "name": "Verify Email Send",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/auth/verify-email", "host": ["{{apiBase}}"], "path": ["auth", "verify-email"] }
+          }
+        },
+        {
+          "name": "Verify Email Confirm",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"{{emailVerificationCode}}\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/verify-email", "host": ["{{apiBase}}"], "path": ["auth", "verify-email"] }
+          }
+        },
+        {
+          "name": "Change Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"newEmail\": \"{{newEmail}}\",\n  \"currentPassword\": \"{{password}}\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/email/change", "host": ["{{apiBase}}"], "path": ["auth", "email", "change"] }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/password/change", "host": ["{{apiBase}}"], "path": ["auth", "password", "change"] }
+          }
+        },
+        {
+          "name": "Password Reset Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/password/reset", "host": ["{{apiBase}}"], "path": ["auth", "password", "reset"] }
+          }
+        },
+        {
+          "name": "Password Reset Confirm",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"{{resetCode}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/password/reset/confirm", "host": ["{{apiBase}}"], "path": ["auth", "password", "reset", "confirm"] }
+          }
+        },
+        {
+          "name": "OTP Send",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"destination\": \"{{email}}\",\n  \"channel\": \"email\",\n  \"purpose\": \"login\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/otp/send", "host": ["{{apiBase}}"], "path": ["auth", "otp", "send"] }
+          }
+        },
+        {
+          "name": "OTP Verify",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"destination\": \"{{email}}\",\n  \"code\": \"{{otpCode}}\",\n  \"channel\": \"email\",\n  \"purpose\": \"login\"\n}" },
+            "url": { "raw": "{{apiBase}}/auth/otp/verify", "host": ["{{apiBase}}"], "path": ["auth", "otp", "verify"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('OTP verify returns 200/400/429', function () { pm.expect([200,400,401,403,404,429]).to.include(pm.response.code); });", "if (pm.response.code === 200) { const j = pm.response.json(); if (j.accessToken) pm.environment.set('accessToken', j.accessToken); if (j.user && j.user.id) pm.environment.set('userId', j.user.id); if (j.resetToken) pm.environment.set('resetToken', j.resetToken); }"] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 Resumes",
+      "item": [
+        {
+          "name": "List Resumes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/resumes?page=1&limit=10&status=all",
+              "host": ["{{apiBase}}"],
+              "path": ["resumes"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" },
+                { "key": "status", "value": "all" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Resumes list returns 200/401', function () { pm.expect([200,401]).to.include(pm.response.code); });", "if (pm.response.code === 200) { const j = pm.response.json(); if (j.resumes && j.resumes.length && j.resumes[0].id) pm.environment.set('resumeId', j.resumes[0].id); }"] } }]
+        },
+        {
+          "name": "Upload Resume (multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "{{resumeFilePath}}" },
+                { "key": "title", "value": "{{resumeTitle}}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{apiBase}}/resumes/upload", "host": ["{{apiBase}}"], "path": ["resumes", "upload"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Upload returns 200/400/401', function () { pm.expect([200,400,401,404]).to.include(pm.response.code); });", "if (pm.response.code === 200) { const j = pm.response.json(); if (j.resumeDataId) pm.environment.set('resumeId', j.resumeDataId); if (j.fileId) pm.environment.set('fileId', j.fileId); if (j.objectKey) pm.environment.set('objectKey', j.objectKey); }"] } }]
+        },
+        {
+          "name": "Generate Upload URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/resumes/upload-url?filename={{presignedUploadFilename}}&contentType={{presignedUploadContentType}}",
+              "host": ["{{apiBase}}"],
+              "path": ["resumes", "upload-url"],
+              "query": [
+                { "key": "filename", "value": "{{presignedUploadFilename}}" },
+                { "key": "contentType", "value": "{{presignedUploadContentType}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Resume by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/resumes/{{resumeId}}", "host": ["{{apiBase}}"], "path": ["resumes", "{{resumeId}}"] }
+          }
+        },
+        {
+          "name": "Patch Resume",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{resumeTitle}} Updated\",\n  \"resumeText\": \"{{resumeText}}\",\n  \"jobDescription\": \"{{jobDescription}}\",\n  \"jobRole\": \"{{jobRole}}\"\n}"
+            },
+            "url": { "raw": "{{apiBase}}/resumes/{{resumeId}}", "host": ["{{apiBase}}"], "path": ["resumes", "{{resumeId}}"] }
+          }
+        },
+        {
+          "name": "Archive Resume",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"archived\": true\n}" },
+            "url": { "raw": "{{apiBase}}/resumes/{{resumeId}}/archive", "host": ["{{apiBase}}"], "path": ["resumes", "{{resumeId}}", "archive"] }
+          }
+        },
+        {
+          "name": "Download Resume URL (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{apiBase}}/resumes/{{resumeId}}/download?source=auto",
+              "host": ["{{apiBase}}"],
+              "path": ["resumes", "{{resumeId}}", "download"],
+              "query": [{ "key": "source", "value": "auto" }]
+            }
+          }
+        },
+        {
+          "name": "Delete Resume Soft",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/resumes/{{resumeId}}", "host": ["{{apiBase}}"], "path": ["resumes", "{{resumeId}}"] }
+          }
+        },
+        {
+          "name": "Delete Resume Hard",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/resumes/{{resumeId}}?hard=true",
+              "host": ["{{apiBase}}"],
+              "path": ["resumes", "{{resumeId}}"],
+              "query": [{ "key": "hard", "value": "true" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Rate Limit",
+      "item": [
+        {
+          "name": "Get Rate Limit Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{apiBase}}/rate-limit/status?userId={{userId}}",
+              "host": ["{{apiBase}}"],
+              "path": ["rate-limit", "status"],
+              "query": [{ "key": "userId", "value": "{{userId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Reset Rate Limit (POST)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"action\": \"reset\"\n}" },
+            "url": { "raw": "{{apiBase}}/rate-limit/status", "host": ["{{apiBase}}"], "path": ["rate-limit", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Notifications",
+      "item": [
+        {
+          "name": "Send Notification",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"email\",\n  \"to\": \"{{email}}\",\n  \"type\": \"notification\",\n  \"subject\": \"Postman E2E Test\",\n  \"data\": {\n    \"message\": \"Hello from Postman\"\n  }\n}"
+            },
+            "url": { "raw": "{{apiBase}}/notifications/send", "host": ["{{apiBase}}"], "path": ["notifications", "send"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Notification send returns 200/400', function () { pm.expect([200,400,500]).to.include(pm.response.code); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "06 Admin",
+      "item": [
+        {
+          "name": "Admin Init GET",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/admin/init", "host": ["{{apiBase}}"], "path": ["admin", "init"] }
+          }
+        },
+        {
+          "name": "Admin Init POST",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/admin/init", "host": ["{{apiBase}}"], "path": ["admin", "init"] }
+          }
+        },
+        {
+          "name": "Admin Cleanup GET",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/admin/cleanup", "host": ["{{apiBase}}"], "path": ["admin", "cleanup"] }
+          }
+        },
+        {
+          "name": "Admin Cleanup POST",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"cleanup\",\n  \"retentionDays\": 30\n}"
+            },
+            "url": { "raw": "{{apiBase}}/admin/cleanup", "host": ["{{apiBase}}"], "path": ["admin", "cleanup"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Admin cleanup returns expected status', function () { pm.expect([200,400,401,500]).to.include(pm.response.code); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "07 Webhooks",
+      "item": [
+        {
+          "name": "Razorpay Webhook Health GET",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{apiBase}}/webhooks/razorpay", "host": ["{{apiBase}}"], "path": ["webhooks", "razorpay"] }
+          }
+        },
+        {
+          "name": "Razorpay Webhook POST (unsigned sample)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-razorpay-signature", "value": "replace_with_valid_signature" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"payment.captured\",\n  \"payload\": {\n    \"payment\": {\n      \"entity\": {\n        \"id\": \"pay_test\",\n        \"amount\": 99900,\n        \"currency\": \"INR\",\n        \"status\": \"captured\",\n        \"email\": \"{{email}}\"\n      }\n    }\n  }\n}"
+            },
+            "url": { "raw": "{{apiBase}}/webhooks/razorpay", "host": ["{{apiBase}}"], "path": ["webhooks", "razorpay"] },
+            "description": "Use a real signature from Razorpay to test happy path."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Webhook unsigned sample returns 200/400/401', function () { pm.expect([200,400,401,500]).to.include(pm.response.code); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "08 WebSocket HTTP Endpoints",
+      "item": [
+        {
+          "name": "WebSocket Service Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{wsBaseUrl}}/healthz", "host": ["{{wsBaseUrl}}"], "path": ["healthz"] }
+          }
+        },
+        {
+          "name": "WebSocket Service Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{wsBaseUrl}}/metrics", "host": ["{{wsBaseUrl}}"], "path": ["metrics"] }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -3,7 +3,8 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 9002",
+    "dev": "next dev --webpack --port 9002",
+    "dev:prod-env": "node --env-file=.env.production ./node_modules/next/dist/bin/next dev --webpack --port 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "npm run db:generate && next build --webpack",

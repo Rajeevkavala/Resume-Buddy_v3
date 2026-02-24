@@ -13,13 +13,13 @@ export async function register() {
     // Only run in the Node.js runtime (not Edge)
 
     // ---- Validate required environment variables ----
-    const required = [
-      'DATABASE_URL',
-      'REDIS_URL',
-      'JWT_ACCESS_SECRET',
-      'JWT_REFRESH_SECRET',
-    ];
+    const required = ['DATABASE_URL', 'REDIS_URL', 'JWT_REFRESH_SECRET'];
     const missing = required.filter((key) => !process.env[key]);
+
+    const hasJwtSecret = Boolean(process.env.JWT_SECRET || process.env.JWT_ACCESS_SECRET);
+    if (!hasJwtSecret) {
+      missing.push('JWT_SECRET (or JWT_ACCESS_SECRET)');
+    }
     if (missing.length > 0) {
       console.error(`[Startup] Missing required env vars: ${missing.join(', ')}`);
     }
