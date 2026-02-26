@@ -39,7 +39,7 @@ export interface HistoricalDataPoint {
  */
 export async function trackApiUsage(
   userId: string,
-  provider: 'groq' | 'gemini' | 'openrouter',
+  provider: 'groq' | 'gemini' | 'openrouter' | 'sarvam',
   operation: string,
   tokensUsed: number,
   options?: { latencyMs?: number; success?: boolean; error?: string }

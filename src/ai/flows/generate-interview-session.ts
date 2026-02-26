@@ -21,7 +21,7 @@ export const GenerateInterviewSessionInputSchema = z.object({
   type: z.enum(['dsa', 'behavioral', 'technical', 'system-design']),
   difficulty: z.enum(['easy', 'medium', 'hard']),
   questionCount: z.number().min(3).max(15).default(5),
-  answerFormat: z.enum(['mcq', 'text', 'voice']).default('text'),
+  answerFormat: z.enum(['mcq', 'text', 'voice', 'code']).default('text'),
   resumeText: z.string().optional(),
   jobDescription: z.string().optional(),
 });

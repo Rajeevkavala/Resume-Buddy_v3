@@ -1292,8 +1292,8 @@ export async function extractJobDescriptionFromUrl(url: string, userId?: string)
           parts.push(`Qualifications:\n${structuredData.qualifications.map(q => `• ${q}`).join('\n')}`);
         }
         
-        if (structuredData.benefits?.length > 0) {
-          parts.push(`Benefits:\n${structuredData.benefits.map(b => `• ${b}`).join('\n')}`);
+        if ((structuredData.benefits?.length ?? 0) > 0) {
+          parts.push(`Benefits:\n${(structuredData.benefits ?? []).map(b => `• ${b}`).join('\n')}`);
         }
         
         finalDescription = parts.join('\n\n');

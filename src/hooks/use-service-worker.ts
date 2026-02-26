@@ -11,9 +11,17 @@ export function useServiceWorker() {
     if ('serviceWorker' in navigator) {
       const registerSW = async () => {
         try {
-          const registration = await navigator.serviceWorker.register('/sw.js');
+          // updateViaCache:'none' ensures the browser always fetches a fresh
+          // sw.js from the network instead of serving a stale HTTP-cached copy.
+          const registration = await navigator.serviceWorker.register('/sw.js', {
+            updateViaCache: 'none',
+          });
           console.log('Service Worker registered successfully:', registration);
-          
+
+          // Immediately check for a newer service worker so version bumps
+          // take effect without requiring a second page load.
+          registration.update().catch(() => {});
+
           // Wait for service worker to be ready
           await navigator.serviceWorker.ready;
           

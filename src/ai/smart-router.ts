@@ -19,6 +19,7 @@
  */
 
 import { generateWithGemini } from './providers/gemini';
+import { generateWithSarvam, isSarvamAvailable } from './providers/sarvam';
 import { estimateTokens } from '@/lib/prompt-optimizer';
 import { trackUsage } from '@/lib/usage-analytics';
 import { trackApiUsage } from '@/lib/admin/api-usage-tracking';
@@ -36,7 +37,10 @@ export type AIFeature =
   | 'dsa-questions'
   | 'evaluate-answer'
   | 'follow-up-question'
-  | 'evaluate-code';
+  | 'evaluate-code'
+  | 'live-interview-respond'
+  | 'live-interview-start'
+  | 'live-interview-evaluate';
 
 // Model tiers based on capability
 export type ModelTier = 'fast' | 'balanced' | 'powerful';
@@ -44,7 +48,7 @@ export type ModelTier = 'fast' | 'balanced' | 'powerful';
 // Model configuration for each provider
 interface ModelConfig {
   tier: ModelTier;
-  provider: 'groq' | 'gemini' | 'openrouter';
+  provider: 'groq' | 'gemini' | 'openrouter' | 'sarvam';
   model: string;           // Actual model name for API calls
   tokensPerSecond: number;
   costPer1MInput: number;  // $ per 1M input tokens
@@ -79,6 +83,15 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     costPer1MInput: 0.075,
     costPer1MOutput: 0.30,
   },
+  // Sarvam-M LLM (optimized for Indian English interviews)
+  'sarvam-m': {
+    tier: 'balanced',
+    provider: 'sarvam',
+    model: 'sarvam-m',
+    tokensPerSecond: 300,
+    costPer1MInput: 0.10,
+    costPer1MOutput: 0.15,
+  },
 };
 
 // ============================================
@@ -97,6 +110,9 @@ export const FEATURE_TOKEN_LIMITS: Record<AIFeature, number> = {
   'evaluate-answer': 4000,      // Answer evaluation
   'follow-up-question': 3000,   // Quick follow-up
   'evaluate-code': 5000,        // Code analysis
+  'live-interview-respond': 4000, // Live interview conversational response
+  'live-interview-start': 5000,   // Live interview session start
+  'live-interview-evaluate': 6000, // Live interview full evaluation
 };
 
 // Realistic output token estimates per feature (for cost calculation)
@@ -113,6 +129,9 @@ export const FEATURE_OUTPUT_TOKENS: Record<AIFeature, number> = {
   'evaluate-answer': 800,       // Scored feedback
   'follow-up-question': 400,    // Single follow-up
   'evaluate-code': 1000,        // Detailed code analysis
+  'live-interview-respond': 500,  // Quick conversational response
+  'live-interview-start': 800,    // Interview opening + first question
+  'live-interview-evaluate': 1500, // Comprehensive evaluation
 };
 
 // Smart routing configuration
@@ -195,6 +214,24 @@ export const FEATURE_MODEL_ROUTING: Record<AIFeature, {
     fallback: 'groq-llama-70b',
     lastResort: 'gemini',
     reason: 'Cost-optimized evaluation - 8B sufficient for code review',
+  },
+  'live-interview-respond': {
+    primary: 'sarvam-m',           // Sarvam-M for best Indian English understanding
+    fallback: 'groq-llama-8b',    // Fast fallback if Sarvam unavailable
+    lastResort: 'gemini',
+    reason: 'Sarvam-M optimized for Indian English interview context, Groq 8B as fast fallback',
+  },
+  'live-interview-start': {
+    primary: 'sarvam-m',
+    fallback: 'groq-llama-70b',
+    lastResort: 'gemini',
+    reason: 'Interview opening benefits from Sarvam quality',
+  },
+  'live-interview-evaluate': {
+    primary: 'sarvam-m',
+    fallback: 'groq-llama-70b',
+    lastResort: 'gemini',
+    reason: 'Evaluation needs thorough analysis — Sarvam-M handles well',
   },
 };
 
@@ -350,6 +387,18 @@ async function generateWithModel(
     case 'gemini':
       return generateWithGemini(options);
     
+    case 'sarvam':
+      if (!isSarvamAvailable()) {
+        throw new Error('Sarvam AI not configured (SARVAM_API_KEY missing)');
+      }
+      return generateWithSarvam({
+        prompt: options.prompt,
+        systemPrompt: options.systemPrompt,
+        temperature: options.temperature,
+        maxTokens: options.maxTokens,
+        jsonMode: options.jsonMode,
+      });
+    
     default:
       throw new Error(`Unknown provider: ${config.provider}`);
   }
@@ -470,6 +519,9 @@ const FEATURE_INPUT_TOKENS: Record<AIFeature, number> = {
   'evaluate-answer': 2000,
   'follow-up-question': 1000,
   'evaluate-code': 2500,
+  'live-interview-respond': 2000,  // Real-time conversation
+  'live-interview-start': 2500,
+  'live-interview-evaluate': 3000,
 };
 
 /**
@@ -497,6 +549,9 @@ export function getCostComparison(): {
     'evaluate-answer': 0.06,
     'follow-up-question': 0.04,
     'evaluate-code': 0.04,
+    'live-interview-respond': 0.04,
+    'live-interview-start': 0.02,
+    'live-interview-evaluate': 0.02,
   };
 
   let smartRoutingCost = 0;

@@ -14,8 +14,9 @@ import { CreditsExhaustedModal, useCreditsExhaustedModal } from '@/components/cr
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { BrowserSupportBanner, SessionConfigPanel, SessionResults, ActiveInterviewView } from '@/components/interview';
+import { LiveInterviewRoom } from '@/components/live-interview';
 import { useInterviewSession } from '@/hooks/use-interview-session';
-import { BrainCircuit, Zap } from 'lucide-react';
+import { BrainCircuit, Zap, Radio } from 'lucide-react';
 
 import { QuizContent } from './components';
 
@@ -146,7 +147,7 @@ export default function InterviewPage() {
         <BrowserSupportBanner />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2 mx-auto">
+          <TabsList className="grid w-full max-w-lg grid-cols-3 mx-auto">
             <TabsTrigger value="quick-quiz" className="gap-2">
               <Zap className="h-4 w-4" />
               Quick Quiz
@@ -154,6 +155,10 @@ export default function InterviewPage() {
             <TabsTrigger value="ai-interview" className="gap-2">
               <BrainCircuit className="h-4 w-4" />
               AI Interview
+            </TabsTrigger>
+            <TabsTrigger value="live-interview" className="gap-2">
+              <Radio className="h-4 w-4" />
+              Live Interview
             </TabsTrigger>
           </TabsList>
 
@@ -248,6 +253,15 @@ export default function InterviewPage() {
                 onNewSession={() => session.reset()}
               />
             )}
+          </TabsContent>
+
+          {/* Live Interview Tab (real-time voice with Sarvam AI) */}
+          <TabsContent value="live-interview" className="mt-6">
+            <LiveInterviewRoom
+              userId={user.uid}
+              resumeText={resumeText ?? undefined}
+              jobDescription={jobDescription ?? undefined}
+            />
           </TabsContent>
         </Tabs>
       </div>

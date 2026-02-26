@@ -4,7 +4,7 @@
  * while caching static assets for performance
  */
 
-const CACHE_VERSION = 'v3'; // INCREMENT ON EVERY DEPLOY
+const CACHE_VERSION = 'v4'; // INCREMENT ON EVERY DEPLOY
 const CACHE_NAME = `resume-buddy-${CACHE_VERSION}`;
 
 // Minimal set of routes to cache for offline fallback
@@ -94,20 +94,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
-  // Cache-first for Next.js static assets (they have hashed filenames)
+  // Network-first for Next.js static assets.
+  // Even though /_next/static/ filenames are hashed in production, they can
+  // change after a .next cache wipe in development. Network-first ensures
+  // stale chunks are never served with outdated server-action IDs.
   if (isNextInternal) {
     event.respondWith(
-      caches.match(event.request).then(cached => {
-        if (cached) return cached;
-        
-        return fetch(event.request).then((response) => {
+      fetch(event.request)
+        .then((response) => {
           if (response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
           }
           return response;
-        });
-      })
+        })
+        .catch(() => caches.match(event.request))
     );
     return;
   }

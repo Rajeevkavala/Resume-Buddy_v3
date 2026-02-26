@@ -85,6 +85,18 @@ const rateLimitConfigs: Record<string, RateLimitConfig> = {
     windowMs: 60000,
     maxRequests: 10,
   },
+  'live-interview-respond': {
+    windowMs: 60000,
+    maxRequests: 30,    // Higher limit for real-time conversation
+  },
+  'live-interview-stt': {
+    windowMs: 60000,
+    maxRequests: 40,    // Frequent audio chunks
+  },
+  'live-interview-tts': {
+    windowMs: 60000,
+    maxRequests: 30,
+  },
   'default': {
     windowMs: 60000,
     maxRequests: 20,
