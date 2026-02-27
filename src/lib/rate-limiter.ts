@@ -4,7 +4,7 @@
  * Daily limits are persisted in PostgreSQL for reliability across page refreshes
  * Per-minute sliding window uses Redis sorted sets for performance
  * 
- * Tier-aware: Free users get 5 AI credits/day, Pro users get 10 AI credits/day
+ * Tier-aware: Free users get 3 AI credits/day, Pro users get 10 AI credits/day
  */
 import { getRedisClient, isRedisAvailable } from './redis';
 import { prisma } from '@/lib/db';
@@ -225,6 +225,9 @@ async function getDailyAIUsage(userId: string): Promise<{ count: number; date: s
       'generate-cover-letter',
       'parse-resume',
       'interview-session',
+      'live-interview',
+      'live-interview-respond',
+      'live-interview-start',
     ];
 
     const usage = await prisma.usageRecord.aggregate({

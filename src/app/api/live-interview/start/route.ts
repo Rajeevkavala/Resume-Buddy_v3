@@ -55,9 +55,15 @@ export async function POST(req: NextRequest) {
 
     // 2. Rate limit
     try {
-      await enforceRateLimitAsync(userId, 'live-interview');
+      await enforceRateLimitAsync(userId, 'live-interview-start');
     } catch (e: any) {
-      return NextResponse.json({ error: e.message }, { status: 429 });
+      const statusCode = e.code === 'DAILY_LIMIT_EXCEEDED' ? 403 : 429;
+      return NextResponse.json({ 
+        error: e.message,
+        code: e.code || 'RATE_LIMIT_EXCEEDED',
+        dailyLimitExceeded: e.dailyLimitExceeded || false,
+        tier: e.tier || 'free'
+      }, { status: statusCode });
     }
 
     // 3. Tier check

@@ -290,7 +290,10 @@ export function useLiveInterview(userId: string) {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'AI response failed');
+        const errorMessage = err.dailyLimitExceeded
+          ? `Daily credits exhausted! ${err.error || 'Upgrade to Pro for more credits.'}`
+          : err.error || 'AI response failed';
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -355,7 +358,17 @@ export function useLiveInterview(userId: string) {
     } catch (error: any) {
       if (error.name === 'AbortError') return;
       console.error('[LiveInterview] Response error:', error);
-      toast.error('AI response failed', { description: error.message });
+      
+      const isDailyLimit = error.message?.includes('Daily credits exhausted') || error.message?.includes('Daily limit reached');
+      
+      toast.error(
+        isDailyLimit ? 'Daily Credits Exhausted' : 'AI response failed',
+        { 
+          description: error.message,
+          duration: isDailyLimit ? 6000 : 4000,
+        }
+      );
+      
       setState(prev => ({
         ...prev,
         phase: prev.config?.type === 'dsa' ? 'code-input' : 'listening',
@@ -575,7 +588,10 @@ export function useLiveInterview(userId: string) {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to start session');
+        const errorMessage = err.dailyLimitExceeded 
+          ? `Daily credits exhausted! ${err.error || 'Upgrade to Pro for more credits.'}`
+          : err.error || 'Failed to start session';
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -634,7 +650,17 @@ export function useLiveInterview(userId: string) {
     } catch (error: any) {
       if (error.name === 'AbortError') return;
       console.error('[LiveInterview] Start error:', error);
-      toast.error('Failed to start interview', { description: error.message });
+      
+      const isDailyLimit = error.message?.includes('Daily credits exhausted') || error.message?.includes('Daily limit reached');
+      
+      toast.error(
+        isDailyLimit ? 'Daily Credits Exhausted' : 'Failed to start interview',
+        { 
+          description: error.message,
+          duration: isDailyLimit ? 6000 : 4000,
+        }
+      );
+      
       setState(s => ({ ...s, phase: 'setup', error: error.message, isLoading: false }));
     }
   }, [userId]);

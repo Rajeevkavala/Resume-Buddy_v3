@@ -122,13 +122,13 @@ export type AIFeature =
 
 /**
  * Tier limits configuration
- * Free: Limited features, 5 AI credits/day, 2 exports/day
+ * Free: Limited features, 3 AI credits/day, 2 exports/day
  * Pro: All features, 10 AI credits/day, unlimited exports
  */
 export const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
   free: {
-    dailyAICredits: 5,
-    monthlyAICredits: 50,
+    dailyAICredits: 3,
+    monthlyAICredits: 30,
     dailyExports: 2,
     allowedFeatures: ['analyze-resume', 'improve-resume'],
     exportTemplates: 'basic',

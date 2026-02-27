@@ -19,6 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useSubscription } from '@/context/subscription-context';
 import { useAuth } from '@/context/auth-context';
 import { Badge } from '@/components/ui/badge';
@@ -146,14 +152,25 @@ export function CreditsExhaustedModal({
             >
               Maybe Later
             </Button>
-            <Button 
-              className="flex-1 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 text-white shadow-lg"
-              onClick={handleUpgrade}
-            >
-              <Crown className="h-4 w-4 mr-2" />
-              Upgrade to Pro
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    className="flex-1 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 text-white shadow-lg relative overflow-hidden animate-pulse-glow"
+                    onClick={handleUpgrade}
+                  >
+                    {/* Animated glow effect */}
+                    <span className="absolute inset-0 bg-gradient-to-r from-primary via-purple-500 to-primary animate-shimmer opacity-30" />
+                    <Crown className="h-4 w-4 mr-2 relative z-10" />
+                    <span className="relative z-10">Upgrade to Pro</span>
+                    <ArrowRight className="h-4 w-4 ml-2 relative z-10" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View pricing plans and upgrade</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           
           {/* Reset info */}

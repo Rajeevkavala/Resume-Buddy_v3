@@ -55,3 +55,6 @@ infrastructure/docker/.env
 
 # prisma
 packages/database/prisma/migrations/*.sql
+
+# video app
+apps/video/

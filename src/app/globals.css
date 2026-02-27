@@ -550,4 +550,36 @@ html {
   }
 }
 
+/* ============================================
+ * Custom Animations for Credits Modal
+ * ============================================ */
+
+/* Pulse glow animation for upgrade button */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(128, 90, 213, 0.4), 0 0 40px rgba(47, 104, 200, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(128, 90, 213, 0.6), 0 0 60px rgba(47, 104, 200, 0.4);
+  }
+}
+
+/* Shimmer animation for gradient effect */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 3s ease-in-out infinite;
+}
+
 
