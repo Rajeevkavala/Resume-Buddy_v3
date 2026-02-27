@@ -37,7 +37,8 @@ interface CreditsExhaustedModalProps {
 }
 
 /**
- * Modal that appears when a free user exhausts their daily AI credits
+ * Modal that appears when users exhaust their daily AI credits
+ * Shows upgrade prompt for FREE users, next-day message for PRO users
  */
 export function CreditsExhaustedModal({ 
   open, 
@@ -46,14 +47,14 @@ export function CreditsExhaustedModal({
 }: CreditsExhaustedModalProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const { tier, limits } = useSubscription();
+  const { tier, limits, dailyAICreditsRemaining } = useSubscription();
   const [pricing, setPricing] = useState({ amount: 99, duration: 30 });
   const [pricingLoading, setPricingLoading] = useState(true);
 
-  // Fetch dynamic pricing when modal opens
+  // Fetch dynamic pricing when modal opens (FREE users only)
   useEffect(() => {
     const fetchPricing = async () => {
-      if (!open) return;
+      if (!open || tier !== 'free') return;
       try {
         setPricingLoading(true);
         const result = await getSubscriptionInfoAction(user?.uid || '');
@@ -70,17 +71,105 @@ export function CreditsExhaustedModal({
       }
     };
     fetchPricing();
-  }, [open, user?.uid]);
+  }, [open, user?.uid, tier]);
 
   const handleUpgrade = () => {
     onOpenChange(false);
     router.push('/pricing');
   };
 
-  // Only show for free users
-  if (tier !== 'free') {
-    return null;
+  // Calculate next reset time (midnight IST)
+  const getNextResetTime = () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(0, 0, 0, 0);
+    
+    // Convert to IST for display
+    const istTime = new Date(tomorrow.getTime() + (5.5 * 60 * 60 * 1000));
+    return istTime.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  };
+
+  // PRO User Modal - Credits exhausted, wait for tomorrow
+  if (tier === 'pro') {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md border-border/30">
+          <DialogHeader className="text-center space-y-4">
+            {/* Icon */}
+            <div className="mx-auto p-4 rounded-full bg-gradient-to-br from-orange-500/20 to-amber-500/20 border border-orange-500/30">
+              <Zap className="h-8 w-8 text-orange-500" />
+            </div>
+            
+            <DialogTitle className="text-xl font-bold text-center w-full">
+              Daily Credits Used
+            </DialogTitle>
+            
+            <DialogDescription className="text-base text-center">
+              You&apos;ve used all {limits.dailyAICredits} AI credits for today.
+              Your credits will refresh at midnight IST.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            {/* Status */}
+            <div className="bg-muted/50 rounded-lg p-4 text-center space-y-2">
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Crown className="h-4 w-4 text-primary" />
+                <span>You&apos;re on the Pro plan</span>
+              </div>
+              <p className="font-semibold text-lg">
+                Credits reset at {getNextResetTime()}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                You&apos;ll get {limits.dailyAICredits} fresh credits tomorrow
+              </p>
+            </div>
+            
+            {/* What you have */}
+            <div className="bg-primary/5 rounded-lg p-4 space-y-2">
+              <p className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                Your Pro Benefits
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-primary" />
+                  <span>{limits.dailyAICredits} AI credits/day</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <span>Unlimited exports</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Crown className="h-4 w-4 text-primary" />
+                  <span>All features</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Crown className="h-4 w-4 text-primary" />
+                  <span>No watermarks</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Close button */}
+            <Button 
+              className="w-full"
+              onClick={() => onOpenChange(false)}
+            >
+              Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
   }
+
+  // FREE User Modal - Upgrade prompt
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -186,13 +275,15 @@ export function CreditsExhaustedModal({
 /**
  * Hook to manage the credits exhausted modal state
  * Use this in pages that make AI requests to show the modal when credits run out
+ * Works for both FREE and PRO users with different modal content
  */
 export function useCreditsExhaustedModal() {
   const [isOpen, setIsOpen] = useState(false);
   const { dailyAICreditsRemaining, tier } = useSubscription();
   
   const showModal = () => {
-    if (tier === 'free' && dailyAICreditsRemaining <= 0) {
+    // Show modal for any user (FREE or PRO) who has exhausted credits
+    if (dailyAICreditsRemaining <= 0) {
       setIsOpen(true);
     }
   };
@@ -204,6 +295,6 @@ export function useCreditsExhaustedModal() {
     setIsOpen,
     showModal,
     hideModal,
-    shouldShowModal: tier === 'free' && dailyAICreditsRemaining <= 0,
+    shouldShowModal: dailyAICreditsRemaining <= 0,
   };
 }

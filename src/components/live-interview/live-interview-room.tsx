@@ -5,12 +5,13 @@
  * 
  * Main container component that orchestrates the entire live interview experience.
  * Renders different views based on the current phase from useLiveInterview.
+ * Requires Pro subscription to access.
  */
 
 import { useMemo, useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Radio, Timer, HelpCircle, Brain, Code2, Users, Server } from 'lucide-react';
+import { Loader2, Radio, Timer, HelpCircle, Brain, Code2, Users, Server, Lock, Sparkles, Target } from 'lucide-react';
 
 import { useLiveInterview } from '@/hooks/use-live-interview';
 import type { LiveConfig } from '@/hooks/use-live-interview';
@@ -21,6 +22,8 @@ import { LiveCodeEditor } from './live-code-editor';
 import { LiveControls } from './live-controls';
 import { LiveEvaluationView } from './live-evaluation-view';
 import type { InterviewSessionType } from '@/lib/types/interview';
+import { useSubscription } from '@/context/subscription-context';
+import { UpgradePrompt } from '@/components/upgrade-prompt';
 
 interface LiveInterviewRoomProps {
   userId: string;
@@ -43,7 +46,11 @@ const TYPE_LABELS: Record<InterviewSessionType, string> = {
 };
 
 export function LiveInterviewRoom({ userId, resumeText, jobDescription }: LiveInterviewRoomProps) {
+  const { canAccessFeature, isLoading: subscriptionLoading, tier } = useSubscription();
   const live = useLiveInterview(userId);
+
+  // Check if user has access to AI Interview feature
+  const hasAccess = canAccessFeature('ai-interview');
 
   // BUG-008 fix: live timer that updates every second
   const [now, setNow] = useState(Date.now());
@@ -65,6 +72,96 @@ export function LiveInterviewRoom({ userId, resumeText, jobDescription }: LiveIn
   const handleStart = (config: LiveConfig) => {
     live.startSession(config);
   };
+
+  // ─── SUBSCRIPTION CHECK ────────────────────────────────────────────
+
+  if (subscriptionLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-6">
+        <Loader2 className="h-12 w-12 text-primary animate-spin" />
+        <p className="text-sm text-muted-foreground">Loading subscription status...</p>
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] p-8">
+        <Card className="max-w-2xl w-full border-2">
+          <CardHeader className="text-center space-y-4 pb-6">
+            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <Lock className="h-8 w-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
+                <Sparkles className="h-6 w-6 text-primary" />
+                AI Interview - Pro Feature
+              </CardTitle>
+              <CardDescription className="text-base">
+                Upgrade to Pro to access our advanced AI Interview feature with real-time voice interaction
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-4">
+              <h3 className="font-semibold text-lg">What you'll get with Pro:</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <div className="mt-0.5 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Brain className="h-3 w-3 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Real-time AI Interview Practice</p>
+                    <p className="text-sm text-muted-foreground">
+                      Practice with our advanced AI interviewer that adapts to your responses
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="mt-0.5 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Radio className="h-3 w-3 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Voice-enabled Interviews</p>
+                    <p className="text-sm text-muted-foreground">
+                      Natural conversation flow with speech recognition and AI voice responses
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="mt-0.5 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Code2 className="h-3 w-3 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Live Coding Challenges</p>
+                    <p className="text-sm text-muted-foreground">
+                      Practice DSA problems with integrated code editor and instant feedback
+                    </p>
+                  </div>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="mt-0.5 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Target className="h-3 w-3 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Detailed Performance Analysis</p>
+                    <p className="text-sm text-muted-foreground">
+                      Get comprehensive feedback on your interview performance
+                    </p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            
+            <UpgradePrompt 
+              feature="ai-interview"
+              className="w-full"
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // ─── SETUP PHASE ────────────────────────────────────────────────────
 
@@ -137,7 +234,7 @@ export function LiveInterviewRoom({ userId, resumeText, jobDescription }: LiveIn
         <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1.5">
             <Radio className="h-3.5 w-3.5 text-red-500 animate-pulse" />
-            <span className="text-sm font-medium">Live Interview</span>
+            <span className="text-sm font-medium">AI Interview</span>
           </div>
           {live.config && (
             <Badge variant="secondary" className="text-xs gap-1">

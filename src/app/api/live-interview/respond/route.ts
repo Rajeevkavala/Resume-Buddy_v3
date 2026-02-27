@@ -84,6 +84,12 @@ export async function POST(req: NextRequest) {
         dailyLimitExceeded: e.dailyLimitExceeded || false,
         tier: e.tier || 'free'
       }, { status: statusCode });
+      return NextResponse.json({ 
+        error: e.message,
+        code: e.code || 'RATE_LIMIT_EXCEEDED',
+        dailyLimitExceeded: e.dailyLimitExceeded || false,
+        tier: e.tier || 'free'
+      }, { status: statusCode });
     }
 
     const body: LiveInterviewRequest = await req.json();

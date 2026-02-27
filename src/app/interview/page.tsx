@@ -12,11 +12,9 @@ import { usePageTitle } from '@/hooks/use-page-title';
 import { notifyAIRequestMade } from '@/hooks/use-daily-usage';
 import { CreditsExhaustedModal, useCreditsExhaustedModal } from '@/components/credits-exhausted-modal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { BrowserSupportBanner, SessionConfigPanel, SessionResults, ActiveInterviewView } from '@/components/interview';
+import { BrowserSupportBanner } from '@/components/interview';
 import { LiveInterviewRoom } from '@/components/live-interview';
-import { useInterviewSession } from '@/hooks/use-interview-session';
-import { BrainCircuit, Zap, Radio } from 'lucide-react';
+import { BrainCircuit, Zap } from 'lucide-react';
 
 import { QuizContent } from './components';
 
@@ -30,9 +28,6 @@ export default function InterviewPage() {
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('quick-quiz');
   const { isOpen: isCreditsModalOpen, setIsOpen: setCreditsModalOpen, showModal: showCreditsModal } = useCreditsExhaustedModal();
-
-  // AI Interview Session Hook
-  const session = useInterviewSession(user?.uid ?? '');
 
   // Set page title
   usePageTitle('Interview Prep');
@@ -147,7 +142,7 @@ export default function InterviewPage() {
         <BrowserSupportBanner />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-lg grid-cols-3 mx-auto">
+          <TabsList className="grid w-full max-w-lg grid-cols-2 mx-auto">
             <TabsTrigger value="quick-quiz" className="gap-2">
               <Zap className="h-4 w-4" />
               Quick Quiz
@@ -155,10 +150,6 @@ export default function InterviewPage() {
             <TabsTrigger value="ai-interview" className="gap-2">
               <BrainCircuit className="h-4 w-4" />
               AI Interview
-            </TabsTrigger>
-            <TabsTrigger value="live-interview" className="gap-2">
-              <Radio className="h-4 w-4" />
-              Live Interview
             </TabsTrigger>
           </TabsList>
 
@@ -173,90 +164,8 @@ export default function InterviewPage() {
             </div>
           </TabsContent>
 
-          {/* AI Interview Tab (new session-based flow) */}
+          {/* AI Interview Tab (real-time voice with Sarvam AI) */}
           <TabsContent value="ai-interview" className="mt-6">
-            {/* Error display */}
-            {session.error && (
-              <div className="mb-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                <p className="font-medium">Error: {session.error}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => session.reset()}
-                >
-                  Reset
-                </Button>
-              </div>
-            )}
-
-            {/* Config Phase */}
-            {session.phase === 'config' && (
-              <SessionConfigPanel
-                onStart={session.startSession}
-                isLoading={false}
-                resumeText={resumeText ?? undefined}
-                jobDescription={jobDescription ?? undefined}
-              />
-            )}
-
-            {/* Generating Phase */}
-            {session.phase === 'generating' && (
-              <div className="flex flex-col items-center justify-center gap-4 py-16">
-                <div className="h-12 w-12 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
-                <p className="text-muted-foreground">Generating your interview questions...</p>
-              </div>
-            )}
-
-            {/* Active / Evaluating / Review Phase */}
-            {(session.phase === 'active' || session.phase === 'evaluating' || session.phase === 'review') && (
-              session.currentQuestion ? (
-                  <ActiveInterviewView
-                    phase={session.phase}
-                    sessionType={session.session?.type ?? 'behavioral'}
-                    answerFormat={session.session?.answerFormat}
-                    currentQuestion={session.currentQuestion}
-                    currentQuestionIndex={session.currentQuestionIndex}
-                    totalQuestions={session.questions.length}
-                    answers={session.answers}
-                    currentEvaluation={session.currentEvaluation}
-                    voiceExplanation={session.voiceExplanation}
-                    isLoading={false}
-                    codeLanguage={session.session?.codeLanguage ?? 'javascript'}
-                    useVoice={false}
-                    onSubmitAnswer={session.submitAnswer}
-                    onSubmitCode={session.submitCode}
-                    onSetVoiceExplanation={session.setVoiceExplanation}
-                    onNextQuestion={session.nextQuestion}
-                    onSkipQuestion={session.skipQuestion}
-                    onEndSession={session.endSession}
-                  />
-                ) : (
-                  <div className="p-4 bg-destructive/10 rounded-lg text-sm border border-destructive/20">
-                    <p className="font-medium text-destructive">No current question available</p>
-                    <p className="text-muted-foreground mt-1">Please restart the session.</p>
-                  </div>
-                )
-            )}
-
-            {/* Completed Phase */}
-            {session.phase === 'completed' && (
-              <SessionResults
-                questions={session.questions}
-                answers={session.answers}
-                totalDurationMs={
-                  session.session?.timing
-                    ? (session.session.timing.endedAt ?? Date.now()) - session.session.timing.startedAt
-                    : 0
-                }
-                onRetake={() => session.reset()}
-                onNewSession={() => session.reset()}
-              />
-            )}
-          </TabsContent>
-
-          {/* Live Interview Tab (real-time voice with Sarvam AI) */}
-          <TabsContent value="live-interview" className="mt-6">
             <LiveInterviewRoom
               userId={user.uid}
               resumeText={resumeText ?? undefined}

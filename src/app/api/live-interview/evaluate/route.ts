@@ -40,7 +40,13 @@ export async function POST(req: NextRequest) {
     try {
       await enforceRateLimitAsync(session.userId, 'evaluate-answer');
     } catch (e: any) {
-      return NextResponse.json({ error: e.message }, { status: 429 });
+      const statusCode = e.code === 'DAILY_LIMIT_EXCEEDED' ? 403 : 429;
+      return NextResponse.json({ 
+        error: e.message,
+        code: e.code || 'RATE_LIMIT_EXCEEDED',
+        dailyLimitExceeded: e.dailyLimitExceeded || false,
+        tier: e.tier || 'free'
+      }, { status: statusCode });
     }
 
     const body: EvaluateRequest = await req.json();

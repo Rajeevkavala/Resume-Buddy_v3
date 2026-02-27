@@ -118,7 +118,8 @@ export type AIFeature =
   | 'generate-qa'
   | 'generate-questions'
   | 'parse-resume'
-  | 'structure-job';
+  | 'structure-job'
+  | 'ai-interview';
 
 /**
  * Tier limits configuration
@@ -147,6 +148,7 @@ export const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
       'generate-questions',
       'parse-resume',
       'structure-job',
+      'ai-interview',
     ],
     exportTemplates: 'all',
     exportWatermark: false,
@@ -167,6 +169,7 @@ export const FEATURE_DISPLAY_NAMES: Record<AIFeature, string> = {
   'generate-questions': 'Interview Questions',
   'parse-resume': 'Resume Parsing',
   'structure-job': 'Job Description Structuring',
+  'ai-interview': 'AI Interview',
 };
 
 /**
@@ -175,6 +178,7 @@ export const FEATURE_DISPLAY_NAMES: Record<AIFeature, string> = {
 export const PRO_ONLY_FEATURES: AIFeature[] = [
   'generate-qa',
   'generate-questions',
+  'ai-interview',
 ];
 
 // ============ Pricing Configuration ============
@@ -225,6 +229,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       'Everything in Free',
       'Q&A Preparation',
       'Interview Questions',
+      'AI Interview (Live Voice)',
       'Unlimited PDF Exports',
       '10 AI Credits per day',
       'All premium templates',
