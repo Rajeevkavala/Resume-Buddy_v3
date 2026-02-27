@@ -19,7 +19,8 @@ import {
   CreditCard,
   ChevronRight,
   Library,
-  FileText
+  FileText,
+  Headphones
 } from 'lucide-react';
 import { Icons } from '@/components/icons';
 import { useAuth } from '@/context/auth-context';
@@ -632,6 +633,23 @@ export default function Navbar() {
                     <p className="font-medium text-sm group-hover:text-primary transition-colors">Billing</p>
                     <p className="text-xs text-muted-foreground">
                       {isProUser ? 'Manage subscription' : 'Upgrade to Pro'}
+                    </p>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild className="p-0 focus:bg-transparent">
+                <Link 
+                  href="/support" 
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:bg-primary/10 group"
+                >
+                  <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                    <Headphones className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm group-hover:text-primary transition-colors">Support</p>
+                    <p className="text-xs text-muted-foreground">
+                      Get help & join WhatsApp
                     </p>
                   </div>
                 </Link>

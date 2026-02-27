@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { FileText, Brain, Target, MessageSquare, Shield, Mail, MessageCircle } from 'lucide-react';
 
-// WhatsApp support group link - update this with your actual group link
-const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/YOUR_GROUP_INVITE_CODE';
+// WhatsApp support group link
+const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/E8bMuZcjCxt5CMDOksvQWF';
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -19,11 +19,13 @@ export function Footer() {
       { name: 'Improvements', href: '/improvement', description: 'Get resume suggestions' },
     ],
     company: [
-      { name: 'About Us', href: '#', description: 'Learn about ResumeBuddy' },
-      { name: 'Privacy Policy', href: '#', description: 'Our privacy practices' },
-      { name: 'Terms of Service', href: '#', description: 'Our terms of service' },
+      { name: 'About Us', href: '/about-us', description: 'Learn about ResumeBuddy' },
+      { name: 'Privacy Policy', href: '/privacy-policy', description: 'Our privacy practices' },
+      { name: 'Terms of Service', href: '/terms-of-service', description: 'Our terms of service' },
     ],
     support: [
+      { name: 'Support Center', href: '/support', description: 'Get help and support' },
+      { name: 'Contact Us', href: '/contact', description: 'Contact our team' },
       { name: 'WhatsApp Group', href: WHATSAPP_GROUP_LINK, description: 'Join our support group', external: true },
       { name: 'Email Support', href: 'mailto:resumebuddy0@gmail.com', description: 'Contact via email', external: true },
     ],
@@ -140,13 +142,13 @@ export function Footer() {
               © {currentYear} ResumeBuddy. All rights reserved.
             </p>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              <Link href="#" className="hover:text-primary transition-colors">
+              <Link href="/privacy-policy" className="hover:text-primary transition-colors">
                 Privacy
               </Link>
-              <Link href="#" className="hover:text-primary transition-colors">
+              <Link href="/terms-of-service" className="hover:text-primary transition-colors">
                 Terms
               </Link>
-              <Link href="#" className="hover:text-primary transition-colors">
+              <Link href="/contact" className="hover:text-primary transition-colors">
                 Contact
               </Link>
             </div>
