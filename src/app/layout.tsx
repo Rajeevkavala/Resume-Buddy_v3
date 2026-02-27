@@ -244,9 +244,9 @@ export default function RootLayout({
       <body className="font-body antialiased" suppressHydrationWarning>
         <ClientLayout>
           {children}
-          <Analytics />
-          <SpeedInsights />
         </ClientLayout>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
