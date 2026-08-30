@@ -78,7 +78,7 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   'gemini': {
     tier: 'balanced',
     provider: 'gemini',
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     tokensPerSecond: 400,
     costPer1MInput: 0.075,
     costPer1MOutput: 0.30,
