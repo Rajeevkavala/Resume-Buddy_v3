@@ -6,6 +6,8 @@ export {
   ensureBucket,
   getDefaultBucket,
   getStorageClient,
+  getStorageProvider,
+  getStorageRegion,
   uploadFile,
   downloadFile,
   downloadFileAsBuffer,
@@ -27,4 +29,5 @@ export type {
   UploadResult,
   FileMetadata,
   StorageSubfolder,
+  StorageProvider,
 } from '../../packages/storage/src';

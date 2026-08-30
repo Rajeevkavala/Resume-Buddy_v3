@@ -61,12 +61,15 @@ export async function GET(request: NextRequest) {
 
   // Storage metrics
   try {
-    const minioEndpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000';
-    const res = await fetch(`${minioEndpoint}/minio/health/live`, {
-      signal: AbortSignal.timeout(3000),
+    const { getStorageClient, getDefaultBucket } = await import('@/lib/storage');
+    const { HeadBucketCommand } = await import('@aws-sdk/client-s3');
+    const client = getStorageClient();
+    const bucket = getDefaultBucket();
+    await client.send(new HeadBucketCommand({ Bucket: bucket }), {
+      abortSignal: AbortSignal.timeout(3000),
     });
     metrics.storage = {
-      status: res.ok ? 'healthy' : 'unhealthy',
+      status: 'healthy',
     };
   } catch {
     metrics.storage = {

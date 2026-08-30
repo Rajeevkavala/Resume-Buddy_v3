@@ -41,8 +41,8 @@
     "db:studio": "prisma studio --schema=packages/database/prisma/schema.prisma"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.650.0",
-    "@aws-sdk/s3-request-presigner": "^3.650.0",
+    "@aws-sdk/client-s3": "^3.1121.0",
+    "@aws-sdk/s3-request-presigner": "^3.1121.0",
     "@genkit-ai/googleai": "1.19.3",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "3.9.0",

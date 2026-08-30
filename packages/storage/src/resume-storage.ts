@@ -8,10 +8,16 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
-import { s3Client, getDefaultBucket, ensureBucket } from './minio-client';
+import {
+  s3Client,
+  getDefaultBucket,
+  ensureBucket,
+  getStorageProvider,
+  getStorageRegion,
+} from './minio-client';
 
 /**
- * Resume storage service — CRUD operations for files in MinIO/S3.
+ * Resume storage service — CRUD operations for files in AWS S3 / MinIO.
  *
  * Folder structure in bucket:
  *   resumes/{userId}/originals/   — uploaded resume files (PDF, DOCX)
@@ -20,8 +26,6 @@ import { s3Client, getDefaultBucket, ensureBucket } from './minio-client';
  *   resumes/{userId}/exports/     — exported resume PDFs from LaTeX
  *   temp/                         — temporary files (auto-cleanup)
  */
-
-const BUCKET = getDefaultBucket();
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -52,14 +56,15 @@ export async function uploadFile(
   contentType: string,
   subfolder: StorageSubfolder = 'originals',
 ): Promise<UploadResult> {
-  await ensureBucket(BUCKET);
+  const bucket = getDefaultBucket();
+  await ensureBucket(bucket);
   const fileId = nanoid(12);
   const extension = filename.split('.').pop() || 'bin';
   const objectKey = `resumes/${userId}/${subfolder}/${fileId}.${extension}`;
 
   await s3Client.send(
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: objectKey,
       Body: file,
       ContentType: contentType,
@@ -71,13 +76,19 @@ export async function uploadFile(
     }),
   );
 
-  const endpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000';
+  const provider = getStorageProvider();
+  const region = getStorageRegion();
+  const url =
+    provider === 's3'
+      ? `https://${bucket}.s3.${region}.amazonaws.com/${objectKey}`
+      : `${process.env.MINIO_ENDPOINT || 'http://localhost:9000'}/${bucket}/${objectKey}`;
+
   return {
     objectKey,
-    bucket: BUCKET,
+    bucket,
     size: file.length,
     contentType,
-    url: `${endpoint}/${BUCKET}/${objectKey}`,
+    url,
   };
 }
 
@@ -88,9 +99,10 @@ export async function downloadFile(objectKey: string): Promise<{
   contentType: string;
   size: number;
 }> {
+  const bucket = getDefaultBucket();
   const response = await s3Client.send(
     new GetObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: objectKey,
     }),
   );
@@ -108,9 +120,10 @@ export async function downloadFileAsBuffer(objectKey: string): Promise<{
   contentType: string;
   size: number;
 }> {
+  const bucket = getDefaultBucket();
   const response = await s3Client.send(
     new GetObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: objectKey,
     }),
   );
@@ -131,9 +144,10 @@ export async function downloadFileAsBuffer(objectKey: string): Promise<{
 // ─── Delete ──────────────────────────────────────────────
 
 export async function deleteFile(objectKey: string): Promise<void> {
+  const bucket = getDefaultBucket();
   await s3Client.send(
     new DeleteObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: objectKey,
     }),
   );
@@ -145,13 +159,14 @@ export async function listUserFiles(
   userId: string,
   subfolder?: string,
 ): Promise<FileMetadata[]> {
+  const bucket = getDefaultBucket();
   const prefix = subfolder
     ? `resumes/${userId}/${subfolder}/`
     : `resumes/${userId}/`;
 
   const response = await s3Client.send(
     new ListObjectsV2Command({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Prefix: prefix,
     }),
   );
@@ -172,11 +187,12 @@ export async function getPresignedDownloadUrl(
   objectKey: string,
   expiresInSeconds: number = 3600,
 ): Promise<string> {
-  await ensureBucket(BUCKET);
+  const bucket = getDefaultBucket();
+  await ensureBucket(bucket);
   return getSignedUrl(
     s3Client,
     new GetObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: objectKey,
     }),
     { expiresIn: expiresInSeconds },
@@ -190,7 +206,8 @@ export async function getPresignedUploadUrl(
   contentType: string,
   expiresInSeconds: number = 900,
 ): Promise<{ uploadUrl: string; objectKey: string }> {
-  await ensureBucket(BUCKET);
+  const bucket = getDefaultBucket();
+  await ensureBucket(bucket);
   const fileId = nanoid(12);
   const extension = filename.split('.').pop() || 'bin';
   const objectKey = `resumes/${userId}/originals/${fileId}.${extension}`;
@@ -198,7 +215,7 @@ export async function getPresignedUploadUrl(
   const uploadUrl = await getSignedUrl(
     s3Client,
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: objectKey,
       ContentType: contentType,
       Metadata: {
@@ -219,10 +236,11 @@ export async function copyFile(
   sourceKey: string,
   destinationKey: string,
 ): Promise<void> {
+  const bucket = getDefaultBucket();
   await s3Client.send(
     new CopyObjectCommand({
-      Bucket: BUCKET,
-      CopySource: `${BUCKET}/${sourceKey}`,
+      Bucket: bucket,
+      CopySource: `${bucket}/${sourceKey}`,
       Key: destinationKey,
     }),
   );
@@ -231,9 +249,10 @@ export async function copyFile(
 // ─── Metadata ────────────────────────────────────────────
 
 export async function getFileMetadata(objectKey: string): Promise<FileMetadata> {
+  const bucket = getDefaultBucket();
   const response = await s3Client.send(
     new HeadObjectCommand({
-      Bucket: BUCKET,
+      Bucket: bucket,
       Key: objectKey,
     }),
   );

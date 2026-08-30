@@ -1,12 +1,16 @@
-// Phase 4: Cloud Storage Package
-// MinIO (S3-compatible) client + resume storage service
+// Cloud Storage Package
+// AWS S3 client + resume storage service (with MinIO fallback)
 
 export {
   s3Client,
   ensureBucket,
   getDefaultBucket,
   getStorageClient,
+  getStorageProvider,
+  getStorageRegion,
 } from './minio-client';
+
+export type { StorageProvider } from './minio-client';
 
 export {
   uploadFile,

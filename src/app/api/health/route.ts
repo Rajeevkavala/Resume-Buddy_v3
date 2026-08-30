@@ -79,28 +79,36 @@ async function checkRedis(): Promise<ServiceStatus> {
 async function checkStorage(): Promise<ServiceStatus> {
   const start = Date.now();
   try {
-    // Normalise the MINIO_ENDPOINT — it may be "host:port" or "http://host:port"
-    let base = process.env.MINIO_ENDPOINT ?? 'http://localhost:9000';
-    if (!base.startsWith('http')) base = `http://${base}`;
-    // Remove trailing slash
-    base = base.replace(/\/$/, '');
+    const { getStorageClient, getDefaultBucket, getStorageProvider } = await import('@/lib/storage');
+    const { HeadBucketCommand } = await import('@aws-sdk/client-s3');
+
+    const client = getStorageClient();
+    const bucket = getDefaultBucket();
 
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${base}/minio/health/live`, {
-      method: 'HEAD', // lighter than GET — no body transfer
-      signal: controller.signal,
+    const tid = setTimeout(() => controller.abort(), 4000);
+
+    await client.send(new HeadBucketCommand({ Bucket: bucket }), {
+      abortSignal: controller.signal,
     });
     clearTimeout(tid);
+
     return {
-      status: res.ok ? 'healthy' : 'degraded',
+      status: 'healthy',
       latencyMs: Date.now() - start,
     };
   } catch (err) {
+    let providerName = 'Storage';
+    try {
+      const { getStorageProvider } = await import('@/lib/storage');
+      providerName = getStorageProvider().toUpperCase();
+    } catch {
+      // ignore
+    }
     return {
       status: 'unhealthy',
       latencyMs: Date.now() - start,
-      error: err instanceof Error ? err.message : 'MinIO unreachable',
+      error: err instanceof Error ? err.message : `${providerName} unreachable`,
     };
   }
 }
