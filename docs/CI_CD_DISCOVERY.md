@@ -435,47 +435,9 @@ jobs:
           AWS_S3_BUCKET: "test-bucket"
 ```
 
-### 20.2 Workflow 2: Automated Production Frontend Deploy (`.github/workflows/deploy-frontend.yml`)
+> **Note on Frontend Deployment:** Next.js Web Frontend continuous deployment is natively and automatically handled by **Vercel Native Git Integration** on every push to `main` (along with automatic ephemeral preview environments for Pull Requests). No manual GitHub Action is needed for frontend builds.
 
-```yaml
-name: Deploy Production Frontend
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy-vercel:
-    name: Deploy Web to Vercel Production
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod'
-
-      - name: Production Web Smoke Test
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://www.resume-buddy.tech/api/health" || echo "000")
-          echo "Health Check Status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "❌ Health check failed!" && exit 1
-          fi
-          echo "✅ Production Web is healthy!"
-```
-
-### 20.3 Workflow 3: AWS Graviton ARM64 Backend Microservices Deploy (`.github/workflows/deploy-backend.yml`)
+### 20.2 Workflow 2: AWS Graviton ARM64 Backend Microservices Deploy (`.github/workflows/deploy-backend.yml`)
 
 ```yaml
 name: Deploy AWS Backend Microservices
@@ -519,6 +481,55 @@ jobs:
             echo "❌ LaTeX health probe failed" && exit 1
           fi
           echo "✅ Backend Microservices are healthy!"
+```
+
+### 20.3 Workflow 3: Automated Security & CodeQL Vulnerability Scanning (`.github/workflows/security-scan.yml`)
+
+```yaml
+name: Security & Vulnerability Scan
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Weekly on Sunday midnight
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  codeql-and-trivy:
+    name: CodeQL & Container Audit
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy Scan Results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
 ```
 
 ---
