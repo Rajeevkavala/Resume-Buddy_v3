@@ -1,13 +1,11 @@
-import socket
-import ssl
-import json
-import http.client
+import socket, ssl, json, http.client, os
 
 def test():
-    print("Connecting directly to AWS Graviton EC2 (13.207.140.19:443) with hostname api.resume-buddy.tech...")
+    ec2_host = os.getenv("PROBE_TARGET_EC2_HOST", os.getenv("EC2_HOST", "13.207.140.19"))
+    print(f"Connecting directly to AWS Graviton EC2 ({ec2_host}:443) with hostname api.resume-buddy.tech...")
     
     # 1. Establish raw TCP connection to AWS EC2 IP
-    raw_sock = socket.create_connection(("13.207.140.19", 443), timeout=30)
+    raw_sock = socket.create_connection((ec2_host, 443), timeout=30)
     
     # 2. Wrap with TLS with SNI = api.resume-buddy.tech
     context = ssl.create_default_context()

@@ -1,4 +1,4 @@
-import subprocess
+import subprocess, os
 
 script = """
 docker exec resumebuddy-latex node -e "
@@ -23,6 +23,7 @@ import('./dist/latex/serialize.js').then(async ({ serializeToLatex }) => {
 "
 """
 
-p = subprocess.run(['ssh.exe', '-i', 'resumebuddy-key.pem', 'ubuntu@13.207.140.19', script], capture_output=True, text=True)
+ec2_host = os.getenv("PROBE_TARGET_EC2_HOST", os.getenv("EC2_HOST", "13.207.140.19"))
+p = subprocess.run(['ssh.exe', '-i', 'resumebuddy-key.pem', f'ubuntu@{ec2_host}', script], capture_output=True, text=True)
 print("STDOUT:\n", p.stdout)
 print("STDERR:\n", p.stderr)

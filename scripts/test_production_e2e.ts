@@ -120,7 +120,8 @@ async function runAllTests() {
       options: { engine: 'tectonic', return: ['latex', 'pdf'] },
     };
 
-    const targetUrl = 'http://13.207.140.19/v1/resume/latex/compile';
+    const ec2Host = process.env.PROBE_TARGET_EC2_HOST || process.env.EC2_HOST || '13.207.140.19';
+    const targetUrl = `http://${ec2Host}/v1/resume/latex/compile`;
     const resp = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -144,7 +145,8 @@ async function runAllTests() {
   });
 
   await recordTest('Socket.io Realtime Service', 'WebSocket', async () => {
-    const targetUrl = 'http://13.207.140.19/socket.io/?EIO=4&transport=polling';
+    const ec2Host = process.env.PROBE_TARGET_EC2_HOST || process.env.EC2_HOST || '13.207.140.19';
+    const targetUrl = `http://${ec2Host}/socket.io/?EIO=4&transport=polling`;
     const resp = await fetch(targetUrl);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text = await resp.text();

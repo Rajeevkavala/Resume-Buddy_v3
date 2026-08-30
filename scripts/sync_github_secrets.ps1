@@ -44,8 +44,9 @@ foreach ($line in $lines) {
 }
 
 # 2. Add EC2 host and SSH Key
-Write-Host "Setting secret: EC2_HOST..." -NoNewline
-"13.207.140.19" | gh secret set EC2_HOST
+$ec2Host = if ($env:PROBE_TARGET_EC2_HOST) { $env:PROBE_TARGET_EC2_HOST } elseif ($env:EC2_HOST) { $env:EC2_HOST } else { "13.207.140.19" }
+Write-Host "Setting secret: EC2_HOST ($ec2Host)..." -NoNewline
+$ec2Host | gh secret set EC2_HOST
 Write-Host " [OK]" -ForegroundColor Green
 $count++
 

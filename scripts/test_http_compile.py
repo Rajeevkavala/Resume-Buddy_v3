@@ -1,4 +1,4 @@
-import urllib.request, json, time
+import urllib.request, json, time, os
 
 payload = {
     "source": "resumeText",
@@ -10,8 +10,9 @@ payload = {
     }
 }
 
+ec2_host = os.getenv("PROBE_TARGET_EC2_HOST", os.getenv("EC2_HOST", "13.207.140.19"))
 req = urllib.request.Request(
-    "http://13.207.140.19/v1/resume/latex/compile",
+    f"http://{ec2_host}/v1/resume/latex/compile",
     data=json.dumps(payload).encode("utf-8"),
     headers={"Content-Type": "application/json"}
 )

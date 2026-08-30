@@ -1,19 +1,21 @@
-import subprocess
-import time
+import subprocess, time, os
+
+ec2_host = os.getenv("PROBE_TARGET_EC2_HOST", os.getenv("EC2_HOST", "13.207.140.19"))
+acme_email = os.getenv("ACME_EMAIL", "resumebuddy0@gmail.com")
 
 def run_ssh(cmd):
     p = subprocess.run(
-        ['ssh.exe', '-o', 'StrictHostKeyChecking=no', '-i', 'resumebuddy-key.pem', 'ubuntu@13.207.140.19', cmd],
+        ['ssh.exe', '-o', 'StrictHostKeyChecking=no', '-i', 'resumebuddy-key.pem', f'ubuntu@{ec2_host}', cmd],
         capture_output=True,
         text=True
     )
     return p.stdout, p.stderr, p.returncode
 
-print("Checking Certbot SSL certificate issuance on AWS EC2 (13.207.140.19)...")
+print(f"Checking Certbot SSL certificate issuance on AWS EC2 ({ec2_host})...")
 
 certbot_cmd = (
     "sudo certbot certonly --nginx -d api.resume-buddy.tech "
-    "--email resumebuddy0@gmail.com --agree-tos --non-interactive"
+    f"--email {acme_email} --agree-tos --non-interactive"
 )
 
 stdout, stderr, code = run_ssh(certbot_cmd)

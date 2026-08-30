@@ -14,9 +14,17 @@ apps/*/node_modules
 
 # testing
 /coverage
+test-results/
+playwright-report/
+playwright-report.json
+apps/*/test-results/
+apps/*/playwright-report/
+apps/*/playwright-report.json
 
 # next.js
+.next/
 /.next/
+apps/*/.next/
 /out/
 
 # production
@@ -71,4 +79,5 @@ apps/video/
 AGENTS.md
 agents.md
 skills-lock.json
-
+
+/docs
