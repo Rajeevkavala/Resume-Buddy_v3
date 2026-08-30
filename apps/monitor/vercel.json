@@ -2,6 +2,8 @@
   "version": 2,
   "name": "resume-buddy-monitor",
   "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --legacy-peer-deps --include=dev",
   "regions": ["bom1"],
   "env": {
     "NODE_ENV": "production"
