@@ -6,7 +6,7 @@ on:
     paths:
       - 'services/resume-latex-service/**'
       - 'apps/websocket/**'
-      - 'infrastructure/docker/**'
+      - 'docker-compose.backend.yml'
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
@@ -38,8 +38,8 @@ jobs:
             git reset --hard origin/main
             
             echo "📦 Building and starting Docker containers..."
-            docker compose -f infrastructure/docker/docker-compose.prod.yml build --parallel
-            docker compose -f infrastructure/docker/docker-compose.prod.yml up -d
+            docker compose -f docker-compose.backend.yml build --parallel
+            docker compose -f docker-compose.backend.yml up -d
             
             echo "🔄 Reloading Nginx..."
             sudo nginx -t

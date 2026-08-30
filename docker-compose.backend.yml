@@ -1,0 +1,62 @@
+services:
+  latex:
+    build:
+      context: ./services/resume-latex-service
+      dockerfile: Dockerfile
+    container_name: resumebuddy-latex
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - HOST=0.0.0.0
+      - NODE_OPTIONS=--max-old-space-size=384
+      - ALLOWED_ORIGINS=https://www.resume-buddy.tech,https://resume-buddy.tech,https://resume-buddy-v3.vercel.app
+      - LOG_LEVEL=warn
+    ports:
+      - "127.0.0.1:8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+          cpus: "1.2"
+        reservations:
+          memory: 120M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - resumebuddy-backend
+
+  websocket:
+    build:
+      context: ./apps/websocket
+      dockerfile: Dockerfile
+    container_name: resumebuddy-ws
+    restart: unless-stopped
+    env_file: .env.backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - NODE_OPTIONS=--max-old-space-size=256
+    ports:
+      - "127.0.0.1:3001:3001"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.8"
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - resumebuddy-backend
+
+networks:
+  resumebuddy-backend:
+    driver: bridge
