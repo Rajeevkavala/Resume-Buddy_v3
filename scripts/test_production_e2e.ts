@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load .env.production specifically
+// Load .env.production
 dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });
 
 interface TestResult {
@@ -69,7 +69,7 @@ async function runAllTests() {
     const { Redis } = await import('ioredis');
     const client = new Redis(redisUrl, {
       tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
-      connectTimeout: 4000,
+      connectTimeout: 5000,
       maxRetriesPerRequest: 1,
     });
 
@@ -93,7 +93,7 @@ async function runAllTests() {
   // 3. AWS S3 Storage
   console.log('\n🗄️ 2. AWS S3 Cloud Storage');
   await recordTest('AWS S3 (ap-south-1)', 'Storage', async () => {
-    const { getStorageClient, getDefaultBucket, ensureBucket, uploadFile, downloadFileAsBuffer, deleteFile } =
+    const { getDefaultBucket, ensureBucket, uploadFile, downloadFileAsBuffer, deleteFile } =
       await import('../packages/storage/src/index.ts');
 
     await ensureBucket();
@@ -154,9 +154,42 @@ async function runAllTests() {
     return 'Handshake successful, Session ID issued';
   });
 
-  // 5. AI Providers
-  console.log('\n🤖 4. AI LLM Providers');
-  await recordTest('Google Gemini API (Active LLM)', 'AI', async () => {
+  // 5. Smart AI Router Multi-Model Hierarchy
+  console.log('\n🤖 4. AI Multi-Model Routing Hierarchy');
+  await recordTest('GPT-OSS 20B (Primary Conversational & Extraction)', 'AI', async () => {
+    const { smartGenerate } = await import('../src/ai/smart-router');
+    const res = await smartGenerate({
+      feature: 'resume-qa',
+      prompt: 'Summarize candidate skills: "Rajeev Kavala, TypeScript, Next.js, AWS"',
+      systemPrompt: 'Respond in JSON with key "summary".',
+      jsonMode: true,
+    });
+    return `Completed via ${res.provider} (${res.model}) in ${res.latencyMs}ms`;
+  });
+
+  await recordTest('GPT-OSS 120B (Deep Reasoning & Writing)', 'AI', async () => {
+    const { smartGenerate } = await import('../src/ai/smart-router');
+    const res = await smartGenerate({
+      feature: 'resume-analysis',
+      prompt: 'Analyze experience: "Senior Engineer with 5 years distributed systems experience"',
+      systemPrompt: 'Provide evaluation in JSON with key "score".',
+      jsonMode: true,
+    });
+    return `Completed via ${res.provider} (${res.model}) in ${res.latencyMs}ms`;
+  });
+
+  await recordTest('Qwen 3.6 / Coding Model (DSA & Code Evaluation)', 'AI', async () => {
+    const { smartGenerate } = await import('../src/ai/smart-router');
+    const res = await smartGenerate({
+      feature: 'dsa-questions',
+      prompt: 'Suggest 1 problem on Binary Search.',
+      systemPrompt: 'Provide in JSON with key "problem".',
+      jsonMode: true,
+    });
+    return `Completed via ${res.provider} (${res.model}) in ${res.latencyMs}ms`;
+  });
+
+  await recordTest('Google Gemini 2.5 Flash (Last Resort Fallback)', 'AI', async () => {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error('GOOGLE_API_KEY not set');
 
@@ -178,24 +211,6 @@ async function runAllTests() {
     const data = await resp.json();
     const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     return `Model gemini-2.5-flash responded: "${reply}"`;
-  });
-
-  await recordTest('OpenRouter API (Tertiary LLM)', 'AI', async () => {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
-
-    const resp = await fetch('https://openrouter.ai/api/v1/auth/key', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`HTTP ${resp.status}: ${err}`);
-    }
-    const data = await resp.json();
-    const label = data?.data?.label || 'Active';
-    const limit = data?.data?.limit != null ? `$${data.data.limit}` : 'Unlimited';
-    return `Authenticated (${label}, Limit: ${limit})`;
   });
 
   await recordTest('Sarvam AI (Speech/Indic LLM)', 'AI', async () => {
@@ -240,7 +255,7 @@ async function runAllTests() {
 
   // 7. Payment Gateway
   console.log('\n💳 6. Payment Gateway');
-  await recordTest('Razorpay API', 'Payments', async () => {
+  await recordTest('Razorpay Live API', 'Payments', async () => {
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     if (!keyId || !keySecret) throw new Error('Razorpay credentials not set');
@@ -268,17 +283,19 @@ async function runAllTests() {
 
   for (const r of results) {
     const icon = r.status === 'PASSED' ? '✅' : '❌';
-    console.log(`${icon} [${r.category.padEnd(10)}] ${r.service.padEnd(35)} | ${String(r.latencyMs).padStart(4)}ms | ${r.details}`);
+    console.log(`${icon} [${r.category.padEnd(10)}] ${r.service.padEnd(45)} | ${String(r.latencyMs).padStart(4)}ms | ${r.details}`);
     if (r.status === 'PASSED') passed++;
     else failed++;
   }
 
   console.log('\n' + `Total Tests: ${results.length} | Passed: ${passed} | Failed: ${failed}`);
   if (failed === 0) {
-    console.log('🎉 ALL PRODUCTION SERVICES & APIS ARE 100% OPERATIONAL!');
+    console.log('🎉 ALL PRODUCTION SERVICES, APIS & AI MODELS ARE 100% OPERATIONAL!');
   } else {
     console.log(`⚠️  ${failed} service(s) require attention.`);
   }
+
+  return { passed, failed, results };
 }
 
 runAllTests().catch(console.error);

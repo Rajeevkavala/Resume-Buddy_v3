@@ -1,0 +1,15 @@
+[
+  {
+    "ResourceType": "instance",
+    "Tags": [
+      {
+        "Key": "Name",
+        "Value": "resumebuddy-backend-graviton"
+      },
+      {
+        "Key": "Project",
+        "Value": "ResumeBuddy"
+      }
+    ]
+  }
+]

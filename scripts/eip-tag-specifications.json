@@ -1,0 +1,11 @@
+[
+  {
+    "ResourceType": "elastic-ip",
+    "Tags": [
+      {
+        "Key": "Name",
+        "Value": "resumebuddy-backend-eip"
+      }
+    ]
+  }
+]

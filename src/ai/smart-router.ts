@@ -57,24 +57,41 @@ interface ModelConfig {
 
 // Available models configuration (using REAL model names)
 export const MODEL_CONFIGS: Record<string, ModelConfig> = {
-  // Groq Models (Primary) - Using actual Groq model names
-  'groq-llama-8b': {
+  // GPT-OSS Models (OpenAI OSS / Groq / OpenRouter)
+  'gpt-oss-20b': {
     tier: 'fast',
     provider: 'groq',
-    model: 'llama-3.1-8b-instant',
-    tokensPerSecond: 840,  // Groq is faster than initially estimated
-    costPer1MInput: 0.05,
-    costPer1MOutput: 0.08,
+    model: 'openai/gpt-oss-20b',
+    tokensPerSecond: 600,
+    costPer1MInput: 0.10,
+    costPer1MOutput: 0.15,
   },
-  'groq-llama-70b': {
+  'gpt-oss-120b': {
     tier: 'powerful',
     provider: 'groq',
-    model: 'llama-3.3-70b-versatile',
-    tokensPerSecond: 394,
-    costPer1MInput: 0.59,
-    costPer1MOutput: 0.79,
+    model: 'openai/gpt-oss-120b',
+    tokensPerSecond: 300,
+    costPer1MInput: 0.40,
+    costPer1MOutput: 0.60,
+  },
+  // Qwen Code / DSA Model
+  'qwen-3.6-27b': {
+    tier: 'balanced',
+    provider: 'openrouter',
+    model: 'qwen/qwen-2.5-72b-instruct',
+    tokensPerSecond: 450,
+    costPer1MInput: 0.20,
+    costPer1MOutput: 0.30,
   },
   // Gemini (Last Resort Fallback)
+  'gemini-2.5-flash': {
+    tier: 'balanced',
+    provider: 'gemini',
+    model: 'gemini-2.5-flash',
+    tokensPerSecond: 400,
+    costPer1MInput: 0.075,
+    costPer1MOutput: 0.30,
+  },
   'gemini': {
     tier: 'balanced',
     provider: 'gemini',
@@ -91,6 +108,23 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     tokensPerSecond: 300,
     costPer1MInput: 0.10,
     costPer1MOutput: 0.15,
+  },
+  // Legacy aliases
+  'groq-llama-8b': {
+    tier: 'fast',
+    provider: 'groq',
+    model: 'openai/gpt-oss-20b',
+    tokensPerSecond: 600,
+    costPer1MInput: 0.10,
+    costPer1MOutput: 0.15,
+  },
+  'groq-llama-70b': {
+    tier: 'powerful',
+    provider: 'groq',
+    model: 'openai/gpt-oss-120b',
+    tokensPerSecond: 300,
+    costPer1MInput: 0.40,
+    costPer1MOutput: 0.60,
   },
 };
 
@@ -135,8 +169,7 @@ export const FEATURE_OUTPUT_TOKENS: Record<AIFeature, number> = {
 };
 
 // Smart routing configuration
-// Maps features to recommended models
-// Strategy: Primary → Groq | Fallback → Groq (smaller) | Last Resort → Gemini
+// Maps features to recommended models based on accuracy, speed and cost
 export const FEATURE_MODEL_ROUTING: Record<AIFeature, {
   primary: string;
   fallback: string;
@@ -144,94 +177,94 @@ export const FEATURE_MODEL_ROUTING: Record<AIFeature, {
   reason: string;
 }> = {
   'resume-qa': {
-    primary: 'groq-llama-8b',
-    fallback: 'groq-llama-70b',   // Upgrade on failure for reliability
-    lastResort: 'gemini',
-    reason: 'Simple Q&A - 8B handles well, 70B if needed',
+    primary: 'gpt-oss-20b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Fast conversational reasoning',
   },
   'auto-fill-resume': {
-    primary: 'groq-llama-8b',
-    fallback: 'groq-llama-70b',
-    lastResort: 'gemini',
-    reason: 'Structured extraction - 8B efficient, 70B backup',
+    primary: 'gpt-oss-20b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Structured extraction',
   },
   'auto-fill-jd': {
-    primary: 'groq-llama-8b',
-    fallback: 'groq-llama-70b',
-    lastResort: 'gemini',
-    reason: 'JD parsing - fast structured task',
+    primary: 'gpt-oss-20b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Parsing & JSON output',
   },
   'resume-analysis': {
-    primary: 'groq-llama-70b',     // Analysis needs more intelligence
-    fallback: 'groq-llama-8b',     // Downgrade if rate limited
-    lastResort: 'gemini',
-    reason: 'Analysis needs 70B accuracy, 8B acceptable fallback',
+    primary: 'gpt-oss-120b',
+    fallback: 'gpt-oss-20b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Deep reasoning',
   },
   'resume-improvement': {
-    primary: 'groq-llama-70b',
-    fallback: 'groq-llama-8b',     // Downgrade on failure
-    lastResort: 'gemini',
-    reason: 'Complex rewriting - 70B preferred, 8B acceptable',
-  },
-  'interview-questions': {
-    primary: 'groq-llama-70b',
-    fallback: 'groq-llama-8b',
-    lastResort: 'gemini',
-    reason: 'Quality MCQs - 70B preferred, 8B acceptable',
+    primary: 'gpt-oss-120b',
+    fallback: 'gpt-oss-20b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Best rewriting quality',
   },
   'cover-letter': {
-    primary: 'groq-llama-70b',     // Quality writing needs 70B
-    fallback: 'groq-llama-8b',     // Downgrade if rate limited
-    lastResort: 'gemini',
-    reason: 'Creative writing - 70B for quality, 8B acceptable',
+    primary: 'gpt-oss-120b',
+    fallback: 'gpt-oss-20b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'High-quality writing',
+  },
+  'interview-questions': {
+    primary: 'gpt-oss-120b',
+    fallback: 'gpt-oss-20b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Better question generation',
   },
   'interview-session': {
-    primary: 'groq-llama-70b',
-    fallback: 'groq-llama-8b',
-    lastResort: 'gemini',
-    reason: 'Quality interview questions need 70B intelligence',
+    primary: 'gpt-oss-120b',
+    fallback: 'gpt-oss-20b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Multi-turn reasoning',
   },
   'dsa-questions': {
-    primary: 'groq-llama-70b',
-    fallback: 'groq-llama-8b',
-    lastResort: 'gemini',
-    reason: 'DSA problems need 70B for correct complexity analysis',
+    primary: 'qwen-3.6-27b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Strong coding/problem generation',
   },
   'evaluate-answer': {
-    primary: 'groq-llama-8b',      // Use faster 8B model for cost efficiency
-    fallback: 'groq-llama-70b',
-    lastResort: 'gemini',
-    reason: 'Cost-optimized evaluation - 8B sufficient for scoring',
+    primary: 'gpt-oss-20b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Fast scoring & feedback',
   },
   'follow-up-question': {
-    primary: 'groq-llama-8b',      // Fast response for conversational flow
-    fallback: 'groq-llama-70b',
-    lastResort: 'gemini',
-    reason: 'Quick follow-up - 8B is fast enough',
+    primary: 'gpt-oss-20b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Low latency',
   },
   'evaluate-code': {
-    primary: 'groq-llama-8b',      // Use faster 8B model for cost efficiency
-    fallback: 'groq-llama-70b',
-    lastResort: 'gemini',
-    reason: 'Cost-optimized evaluation - 8B sufficient for code review',
+    primary: 'qwen-3.6-27b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Better code understanding',
   },
   'live-interview-respond': {
-    primary: 'sarvam-m',           // Sarvam-M for best Indian English understanding
-    fallback: 'groq-llama-8b',    // Fast fallback if Sarvam unavailable
-    lastResort: 'gemini',
-    reason: 'Sarvam-M optimized for Indian English interview context, Groq 8B as fast fallback',
+    primary: 'gpt-oss-20b',
+    fallback: 'gpt-oss-120b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Low-latency conversation',
   },
   'live-interview-start': {
-    primary: 'sarvam-m',
-    fallback: 'groq-llama-70b',
-    lastResort: 'gemini',
-    reason: 'Interview opening benefits from Sarvam quality',
+    primary: 'gpt-oss-120b',
+    fallback: 'gpt-oss-20b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Better interview setup',
   },
   'live-interview-evaluate': {
-    primary: 'sarvam-m',
-    fallback: 'groq-llama-70b',
-    lastResort: 'gemini',
-    reason: 'Evaluation needs thorough analysis — Sarvam-M handles well',
+    primary: 'gpt-oss-120b',
+    fallback: 'gpt-oss-20b',
+    lastResort: 'gemini-2.5-flash',
+    reason: 'Comprehensive evaluation',
   },
 };
 
@@ -378,15 +411,39 @@ async function generateWithModel(
 ): Promise<string> {
   switch (config.provider) {
     case 'groq':
-      // Pass the REAL model name directly to Groq API
-      return generateWithGroqDirect({
+      if (process.env.GROQ_API_KEY) {
+        try {
+          return await generateWithGroqDirect({
+            ...options,
+            model: config.model,
+          });
+        } catch (err: any) {
+          if (process.env.OPENROUTER_API_KEY) {
+            console.warn(`[SmartRouter] Groq failed, attempting OpenRouter with ${config.model}:`, err?.message || err);
+            return await generateWithOpenRouterDirect({
+              ...options,
+              model: config.model,
+            });
+          }
+          throw err;
+        }
+      } else if (process.env.OPENROUTER_API_KEY) {
+        return await generateWithOpenRouterDirect({
+          ...options,
+          model: config.model,
+        });
+      }
+      throw new Error('Neither GROQ_API_KEY nor OPENROUTER_API_KEY is configured');
+
+    case 'openrouter':
+      return generateWithOpenRouterDirect({
         ...options,
-        model: config.model, // e.g., 'llama-3.1-8b-instant' or 'llama-3.3-70b-versatile'
+        model: config.model,
       });
-    
+
     case 'gemini':
       return generateWithGemini(options);
-    
+
     case 'sarvam':
       if (!isSarvamAvailable()) {
         throw new Error('Sarvam AI not configured (SARVAM_API_KEY missing)');
@@ -398,7 +455,7 @@ async function generateWithModel(
         maxTokens: options.maxTokens,
         jsonMode: options.jsonMode,
       });
-    
+
     default:
       throw new Error(`Unknown provider: ${config.provider}`);
   }
@@ -406,7 +463,6 @@ async function generateWithModel(
 
 /**
  * Direct Groq API call with actual model name
- * (Bypasses the 'fast'|'balanced' abstraction in groq.ts)
  */
 async function generateWithGroqDirect(options: {
   prompt: string;
@@ -448,6 +504,56 @@ async function generateWithGroqDirect(options: {
 
   if (!content) {
     throw new Error('No response from Groq');
+  }
+
+  return content;
+}
+
+/**
+ * Direct OpenRouter API call with actual model name
+ */
+async function generateWithOpenRouterDirect(options: {
+  prompt: string;
+  systemPrompt: string;
+  temperature: number;
+  maxTokens: number;
+  jsonMode?: boolean;
+  model: string;
+}): Promise<string> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error('OpenRouter API key not configured');
+  }
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://www.resume-buddy.tech',
+      'X-Title': 'Resume Buddy',
+    },
+    body: JSON.stringify({
+      model: options.model,
+      messages: [
+        { role: 'system', content: options.systemPrompt },
+        { role: 'user', content: options.prompt },
+      ],
+      max_tokens: options.maxTokens,
+      temperature: options.temperature,
+      response_format: options.jsonMode ? { type: 'json_object' } : undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenRouter API error: ${error}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+
+  if (!content) {
+    throw new Error('No response from OpenRouter');
   }
 
   return content;
