@@ -3,24 +3,26 @@
 **Target System:** `monitor.resume-buddy.tech`  
 **Classification:** Internal Administrative Observability & Incident Response Platform  
 **Target File:** `docs/MONITORING_ARCHITECTURE_PLAN.md`  
+**Deployment Model:** Standalone Isolated Application (`apps/monitor`) deployed independently to Vercel  
 **Authors / Roles:** Principal Site Reliability Engineer (SRE), Staff DevOps Engineer, Cloud Architect & Senior Full-Stack Engineer  
 **Date:** August 30, 2026  
 **Status:** Approved for Implementation
 
 ---
 
-# 1. Executive Summary & System Architecture
+# 1. Executive Summary & Standalone Architecture
 
 ### 1.1 Mission & Scope
 The **Resume Buddy Monitoring Platform** (`monitor.resume-buddy.tech`) is an autonomous, real-time observability, telemetry, and synthetic testing platform designed specifically for the distributed architecture of Resume Buddy v3. It provides zero-blindspot visibility across edge web traffic, compute instances, database transactions, caching layers, multi-tier AI inference pipelines, cloud storage, payment flows, and transactional notifications.
 
-### 1.2 Core Architectural Principles
-1. **Zero Impact on Production SLA:** Telemetry gathering occurs out-of-band or through non-blocking asynchronous polling to guarantee zero CPU/memory degradation on client-facing applications.
-2. **Hybrid Ingestion Model (Pull + Push):** 
-   - **Pull (Active Polling & Synthetics):** A central worker schedules regular HTTP/TCP/gRPC health checks, latency probes, and end-to-end user synthetic journeys.
-   - **Push (Event Ingestion):** Production servers stream error logs, unhandled exceptions, and SLA metrics via lightweight webhooks/API events.
-3. **Defense-in-Depth Security:** Gated behind two-layer security: HTTP Basic Authentication at the edge proxy level + Session-based Admin RBAC validating authenticated administrators against `ADMIN_EMAILS`.
-4. **Resilient Failover:** The monitoring platform operates independently of the primary Next.js runtime so that if the main web frontend or microservice cluster degrades, the monitor remains online to alert and diagnose root causes.
+### 1.2 Zero-Conflict Standalone Application Principle
+To guarantee **100% isolation** from the customer-facing application:
+1. **Dedicated Monorepo Package (`apps/monitor`):** The monitoring application is built as an independent Next.js 16 application in `apps/monitor`, completely isolated from the primary root web application (`Resume_Buddy_v3`).
+2. **Zero Code or Dependency Interference:** `apps/monitor` has its own `package.json`, `next.config.mjs`, `tsconfig.json`, `tailwind.config.js`, and dependencies. Modifications, builds, or dependencies of the monitor will never impact customer checkout, AI resume creation, or LaTeX compilation.
+3. **Independent Vercel Project Deployment:**
+   - Primary App: Vercel Project `resume-buddy-v3` (Root: `./`) ➔ `https://www.resume-buddy.tech`
+   - Monitoring App: Vercel Project `resume-buddy-monitor` (Root: `apps/monitor`) ➔ `https://monitor.resume-buddy.tech`
+4. **Out-of-Band Probing & Telemetry:** Ingestion occurs asynchronously without blocking or intercepting live user traffic.
 
 ---
 
@@ -32,7 +34,7 @@ flowchart TB
         AdminBrowser["Admin Browser\n(monitor.resume-buddy.tech)"]
     end
 
-    subgraph MonitoringControlPlane["Monitoring Control Plane (monitor.resume-buddy.tech)"]
+    subgraph StandaloneMonitorApp["Standalone Monitoring Application (apps/monitor)"]
         EdgeAuth["Edge Basic Auth & Reverse Proxy\n(Vercel Edge Middleware)"]
         DashboardUI["Observability UI\n(Next.js 16 + React 19 + Tremor / Radix UI)"]
         MonitorAPI["Monitoring API Server\n(/api/v1/monitor/*)"]
@@ -42,8 +44,8 @@ flowchart TB
         AlertManager["Alert & Escalation Engine\n(Multi-channel Router)"]
     end
 
-    subgraph MonitoredEcosystem["Resume Buddy Production Ecosystem"]
-        WebEdge["Next.js Frontend & Edge Gateway\n(www.resume-buddy.tech / Vercel CDN)"]
+    subgraph MonitoredEcosystem["Resume Buddy Production Ecosystem (Unchanged / Isolated)"]
+        WebEdge["Main Next.js Frontend (Root ./)\n(www.resume-buddy.tech / Vercel CDN)"]
         
         subgraph EC2Host["AWS Graviton EC2 (13.207.140.19 / api.resume-buddy.tech)"]
             NginxProxy["Nginx Reverse Proxy & SSL\n(Ports 80 / 443)"]
@@ -111,8 +113,8 @@ flowchart LR
     end
 
     subgraph VercelEdge["Vercel Global Edge Network"]
-        MonitorApp["monitor.resume-buddy.tech\n(Next.js 16 Monitoring App)"]
-        ProdApp["www.resume-buddy.tech\n(Main SaaS App)"]
+        MonitorApp["Vercel Project: resume-buddy-monitor\nRoot: apps/monitor\nDomain: monitor.resume-buddy.tech"]
+        ProdApp["Vercel Project: resume-buddy-v3\nRoot: ./\nDomain: www.resume-buddy.tech"]
     end
 
     subgraph AWSRegion["AWS ap-south-1 (Mumbai)"]
@@ -240,9 +242,9 @@ stateDiagram-v2
 
 # 5. UI Wireframes & Screen Layout Blueprints
 
-The following wireframes provide exact visual references for frontend engineers implementing the monitoring dashboard in Next.js 16 + Tremor + Radix UI.
+The following wireframes provide exact visual references for frontend engineers implementing the monitoring dashboard in `apps/monitor` using Next.js 16 + Tremor + Radix UI.
 
-### 5.1 Overview / Mission Control Wireframe (`/overview`)
+### 5.1 Overview / Mission Control Wireframe (`apps/monitor/src/app/overview/page.tsx`)
 
 ```text
 +---------------------------------------------------------------------------------------------------------------+
@@ -419,8 +421,8 @@ The following wireframes provide exact visual references for frontend engineers 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor SyntheticBot as Synthetic Monitor Agent
-    participant Web as Next.js Web App
+    actor SyntheticBot as Synthetic Monitor Agent (apps/monitor)
+    participant Web as Next.js Web App (Root ./)
     participant Auth as Session & JWT Tier
     participant DB as Supabase PostgreSQL
     participant LaTeX as AWS Graviton LaTeX Microservice
@@ -440,21 +442,6 @@ sequenceDiagram
     SyntheticBot->>DB: 6. Runs Read Verification Query
     DB-->>SyntheticBot: Verifies DB Pool Latency (< 100ms)
 ```
-
-### Complete List of 12 Synthetic Probes
-
-1. **Homepage & Static Bundles:** Asserts status 200, `<title>ResumeBuddy`, and core CSS/JS bundle loading.
-2. **User Authentication & Session:** Authenticates test user, checks JWT signature via `jose`, asserts HTTP cookie.
-3. **Resume Draft Creation:** Writes test record to Supabase and verifies ID generation.
-4. **LaTeX PDF Compilation:** Compiles LaTeX sample on EC2 port 8080 and verifies `%PDF-1.5` magic bytes.
-5. **AWS S3 Object Lifecycle:** Issues presigned URL, puts 2KB buffer, downloads, verifies SHA-256, and deletes.
-6. **Smart AI Router Inference:** Pings Tier 1 Groq and verifies structured JSON parsing.
-7. **AI Provider Fallback Drill:** Injects artificial timeout to verify Tier 1 ➔ Tier 2 ➔ Tier 3 failover.
-8. **WebSocket Audio Handshake:** Connects WSS socket, joins test room, asserts roundtrip ping < 150ms.
-9. **Razorpay Order Creation:** Pings `/api/payments/create-order` and asserts valid order format `order_*`.
-10. **Resend Email Delivery:** Pings Resend API and verifies delivery receipt callback.
-11. **Twilio SMS OTP:** Dispatches synthetic OTP request and verifies delivery timestamp.
-12. **DNS & SSL Health:** Performs DoH query for apex, www, api, and verifies SSL certificate days remaining > 14.
 
 ---
 
@@ -619,101 +606,138 @@ model MonitorAuditLog {
 
 ---
 
-# 10. Implementation Work Breakdown & Phased Execution
+# 10. Standalone Project Directory Layout (`apps/monitor`)
 
-The entire implementation of the Resume Buddy Monitoring Platform is structured into **7 sequential, production-ready phases**:
+```text
+apps/monitor/
+├── package.json                   # Independent dependencies (Next 16, React 19, Tremor, Lucide, Jose)
+├── next.config.mjs                # Standalone Next.js compiler config with standalone output
+├── tsconfig.json                  # Isolated TypeScript config targeting ES2022
+├── tailwind.config.js             # Dedicated Tailwind configuration with Tremor theme tokens
+├── postcss.config.mjs             # Dedicated PostCSS config
+├── vercel.json                    # Vercel project deployment manifest
+├── .env.example                   # Template of monitoring environment variables
+├── middleware.ts                  # Edge Basic Auth & Admin RBAC verification middleware
+│
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx             # Root layout with sidebar navigation, breadcrumbs & status badge
+│   │   ├── page.tsx               # Entry point (auto-redirects to /overview)
+│   │   ├── overview/page.tsx      # Main Mission Control Dashboard
+│   │   ├── infrastructure/page.tsx# AWS EC2 Graviton & Nginx metrics view
+│   │   ├── frontend/page.tsx      # Vercel Edge & Core Web Vitals view
+│   │   ├── backend/page.tsx       # LaTeX Engine & WebSocket Gateway view
+│   │   ├── database/page.tsx      # Supabase PostgreSQL Pooler saturation view
+│   │   ├── redis/page.tsx         # Upstash Redis & BullMQ jobs view
+│   │   ├── storage/page.tsx       # AWS S3 bucket quota & latency view
+│   │   ├── ai-providers/page.tsx  # Multi-tier AI Router telemetry & leaderboard
+│   │   ├── payments/page.tsx      # Razorpay live transactions view
+│   │   ├── notifications/page.tsx # Resend email & Twilio OTP deliverability view
+│   │   ├── deployments/page.tsx   # GitHub Actions CI/CD runs & Vercel builds view
+│   │   ├── synthetics/page.tsx    # 12 Synthetic user journey test matrix view
+│   │   ├── logs/page.tsx          # Realtime structured JSON log explorer view
+│   │   ├── incidents/page.tsx     # Active incident desk & post-mortem editor
+│   │   ├── alerts/page.tsx        # Alert rule manager & threshold configuration
+│   │   ├── audit-logs/page.tsx    # Tamper-evident admin action log
+│   │   └── settings/page.tsx      # Probe intervals & integration key settings
+│   │
+│   ├── components/
+│   │   ├── sidebar.tsx            # Modern collapsible navigation sidebar
+│   │   ├── header.tsx             # Top navigation with live stream indicator and clock
+│   │   ├── status-badge.tsx       # Animated pulsing status indicator
+│   │   ├── latency-chart.tsx      # Interactive SVG latency sparklines
+│   │   ├── incident-card.tsx      # Incident triage card with Ack button
+│   │   ├── synthetic-stepper.tsx  # Step-by-step workflow timeline
+│   │   ├── live-log-viewer.tsx    # Virtualized high-speed log viewer
+│   │   ├── gauge-widget.tsx       # Radial CPU/Memory utilization gauge
+│   │   └── metric-card.tsx        # Metric callout with delta indicators
+│   │
+│   ├── lib/
+│   │   ├── probes/                # Autonomous service probe executors
+│   │   │   ├── web.probe.ts       # Next.js frontend HTTP probe
+│   │   │   ├── latex.probe.ts     # LaTeX compilation probe
+│   │   │   ├── websocket.probe.ts # Socket.io handshake probe
+│   │   │   ├── database.probe.ts  # Postgres pooler query probe
+│   │   │   ├── redis.probe.ts     # Upstash Redis latency probe
+│   │   │   ├── s3.probe.ts        # S3 object upload/download probe
+│   │   │   └── ai.probe.ts        # Smart AI router fallback probe
+│   │   ├── synthetics/            # 12 End-to-End synthetic workflows
+│   │   ├── alerts/                # Alert rule evaluator & notification dispatcher
+│   │   ├── sse/                   # Server-Sent Events subscription hub
+│   │   └── rollup.ts              # 1m/1h/1d statistical aggregation engine
+│   │
+│   └── types/
+│       └── monitor.ts             # Complete TypeScript domain contracts
+```
+
+---
+
+# 11. Vercel Deployment Guide for `apps/monitor`
+
+### 11.1 Vercel CLI Deployment Commands
+
+To deploy `apps/monitor` as an independent Vercel application:
+
+```bash
+# 1. Navigate to the standalone monitor application directory
+cd apps/monitor
+
+# 2. Link to a new standalone Vercel Project named 'resume-buddy-monitor'
+npx vercel link --project resume-buddy-monitor --yes
+
+# 3. Add Custom Domain on Vercel
+npx vercel domains add monitor.resume-buddy.tech
+
+# 4. Sync Environment Variables from .env.production to the monitor Vercel project
+npx vercel env add MONITOR_ADMIN_USER prod --value "admin" --force
+npx vercel env add MONITOR_ADMIN_PASSWORD prod --value "YOUR_STRONG_PASSWORD" --force
+npx vercel env add ADMIN_EMAILS prod --value "kavalarajeev34@gmail.com" --force
+# (sync remaining DB, Redis, S3, and AI keys)
+
+# 5. Deploy to Production Vercel Edge
+npx vercel --prod
+```
+
+### 11.2 DNS Configuration Table (Namify `manage.get.tech`)
+
+| Record Type | Host Name | Target / Destination Value | Suggested TTL | Purpose |
+|:---:|:---:|:---:|:---:|:---|
+| **CNAME** | `monitor` | `cname.vercel-dns.com` | 3600 (1 hr) | Points `monitor.resume-buddy.tech` to Vercel Global Edge |
+
+---
+
+# 12. Phased Implementation Roadmap
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                              7-PHASE IMPLEMENTATION TIMELINE                           │
 │                                                                                        │
-│   Phase 1: Core Foundation & Edge Basic Auth ────────► Days 1–2 (Estimated: 16h)       │
-│   Phase 2: Autonomous Probing & Telemetry ───────────► Days 3–4 (Estimated: 16h)       │
+│   Phase 1: Scaffold apps/monitor & Edge Basic Auth ──► Days 1–2 (Estimated: 16h)       │
+│   Phase 2: Autonomous Probing & Telemetry Engine ────► Days 3–4 (Estimated: 16h)       │
 │   Phase 3: Realtime SSE Streaming & Overview UI ─────► Days 5–6 (Estimated: 16h)       │
 │   Phase 4: Infrastructure, Database & Cache Views ───► Days 7–8 (Estimated: 16h)       │
 │   Phase 5: 12 Synthetic User Journey Probes ────────► Days 9–10 (Estimated: 16h)      │
 │   Phase 6: Multi-Channel Alerting & Incidents ───────► Days 11–12 (Estimated: 16h)     │
-│   Phase 7: Log Explorer, DNS & Production Hardening ─► Days 13–14 (Estimated: 16h)     │
+│   Phase 7: Log Explorer, DNS & Production Deploy ────► Days 13–14 (Estimated: 16h)     │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 1: Core Foundation, Edge Security & Database Migrations
-- **Objective:** Establish isolated monitoring route hierarchy, edge security, and database tables.
-- **Deliverables:**
-  - Create Prisma migration adding `MonitorServiceHealth`, `MonitorMetricRollup`, `MonitorSyntheticRun`, `MonitorIncident`, `MonitorAuditLog`.
-  - Implement edge Basic Auth middleware (`MONITOR_ADMIN_USER` & `MONITOR_ADMIN_PASSWORD`).
-  - Implement admin RBAC validation checking active JWT against `ADMIN_EMAILS`.
-  - Scaffold `(monitor)` directory layout with Sidebar and Top Navigation.
-- **Verification:** Unauthorized requests receive HTTP 401; valid admin credentials grant dashboard shell.
+### Phase Details:
+1. **Phase 1 (Scaffold `apps/monitor` & Edge Basic Auth):** Create `apps/monitor` with independent `package.json`, `next.config.mjs`, `tsconfig.json`, `tailwind.config.js`, edge Basic Auth middleware, and Prisma models.
+2. **Phase 2 (Autonomous Probing Engine):** Implement 12 service probes in `apps/monitor/src/lib/probes/` with non-blocking `Promise.allSettled()` execution.
+3. **Phase 3 (Realtime SSE & Overview Dashboard):** Implement `/api/v1/monitor/stream` and the `/overview` dashboard with Tremor charts and live telemetry.
+4. **Phase 4 (Deep Infrastructure Views):** Build `/infrastructure`, `/database`, `/redis`, `/storage`, and `/ai-providers` pages.
+5. **Phase 5 (12 Synthetic User Journeys):** Automate end-to-end user workflows on a 5-minute recurring schedule.
+6. **Phase 6 (Multi-Channel Alerting & Incident Desk):** Integrate Resend Email and Twilio SMS/WhatsApp with alert deduplication and post-mortem generation.
+7. **Phase 7 (Production Vercel Deployment):** Configure Namify CNAME DNS record, run `npx vercel --prod` from `apps/monitor`, and verify `https://monitor.resume-buddy.tech`.
 
 ---
 
-### Phase 2: Autonomous Probing Engine & Service Probes
-- **Objective:** Build background health probe workers that test all 12 services in parallel.
-- **Deliverables:**
-  - Create probe handlers in `src/lib/monitor/probes/` for Web, LaTeX, WebSocket, Supabase, Redis, S3, Groq, OpenRouter, Gemini, Razorpay, Resend, Twilio.
-  - Implement `Promise.allSettled()` batch runner with non-blocking execution (<800ms).
-  - Persist probe results to Upstash Redis sliding window buffer.
-- **Verification:** Probes return real status codes, latencies, and healthy/degraded states.
-
----
-
-### Phase 3: Realtime SSE Streaming & Overview Dashboard View
-- **Objective:** Stream live telemetry to the browser and build the central Mission Control view.
-- **Deliverables:**
-  - Implement Server-Sent Events endpoint `/api/v1/monitor/stream`.
-  - Build `/overview` page with status badge, 5 vital cards, 12-service status grid, and 24h latency chart.
-  - Integrate Tremor + Radix UI interactive chart primitives.
-- **Verification:** Browser displays live updating gauges and sparklines without page refresh.
-
----
-
-### Phase 4: Infrastructure, Database & Cache Views
-- **Objective:** Build deep observability pages for EC2 host, Supabase DB pooler, and Upstash Redis.
-- **Deliverables:**
-  - Build `/infrastructure` page displaying CPU/RAM radial gauges, Docker container matrix, and Nginx stats.
-  - Build `/database` page displaying PgBouncer pooler saturation and slow queries.
-  - Build `/redis` and `/storage` pages displaying memory usage, BullMQ jobs, and S3 quota.
-- **Verification:** Verified accuracy against `docker stats`, `pg_stat_activity`, and Upstash `INFO`.
-
----
-
-### Phase 5: 12 Synthetic User Journey Probes
-- **Objective:** Automate synthetic end-to-end user workflows on a 5-minute recurring schedule.
-- **Deliverables:**
-  - Implement 12 synthetic test suites in `src/lib/monitor/synthetics/`.
-  - Build `/synthetics` UI displaying step-by-step progress, duration breakdown, and error logs.
-  - Persist synthetic runs to `MonitorSyntheticRun`.
-- **Verification:** All 12 synthetic workflows complete with green status and accurate latency breakdowns.
-
----
-
-### Phase 6: Multi-Channel Alerting & Incident Management Desk
-- **Objective:** Automate alert dispatching and provide an active outage response desk.
-- **Deliverables:**
-  - Implement alert rule evaluator with 3-consecutive-failure hysteresis and 30-minute deduplication.
-  - Integrate Resend Email and Twilio SMS/WhatsApp dispatchers.
-  - Build `/incidents` page with incident triage cards, SLA timers, acknowledgment buttons, and automated Markdown post-mortem generators.
-- **Verification:** Triggered test alert successfully delivers SMS, Email, and creates incident in DB.
-
----
-
-### Phase 7: Centralized Log Explorer, DNS Configuration & Production Hardening
-- **Objective:** Complete the platform with structured log streaming, DNS setup, and security audits.
-- **Deliverables:**
-  - Build `/logs` page with log stream virtualized viewer, level filters, and search.
-  - Implement automated daily rollup cron task (`0 2 * * *`) aggregating 1m ➔ 1h ➔ 1d metrics.
-  - Add CNAME record `monitor` ➔ `cname.vercel-dns.com` in Namify DNS.
-  - Execute end-to-end chaos test (simulating service restart and validating automated recovery).
-- **Verification:** `https://monitor.resume-buddy.tech` is live, SSL secured, and operational.
-
----
-
-# 11. Environment Configuration Template
+# 13. Environment Configuration Template
 
 ```env
 # ==============================================================================
-# Resume Buddy Monitoring Platform Environment Variables
+# Resume Buddy Monitoring Platform Environment Variables (apps/monitor/.env)
 # ==============================================================================
 
 # Authentication & Security
