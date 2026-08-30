@@ -449,7 +449,7 @@ export function ModernTemplate({ resumeData }: ModernTemplateProps) {
             <h2 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color: colors.primary }}>
               Languages
             </h2>
-            {languages.map((lang, index) => (
+            {languages.map((lang: any, index: number) => (
               <div key={index} className="mb-2 flex justify-between items-center">
                 <span className="text-sm font-medium" style={{ color: colors.text }}>{lang.language}</span>
                 <span className="text-xs" style={{ color: colors.secondary }}>{lang.proficiency}</span>

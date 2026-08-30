@@ -217,3 +217,9 @@ export function filterTemplates(criteria: {
     return true;
   });
 }
+
+export function getTemplatesByIndustry(industry: string): TemplateMetadata[] {
+  return filterTemplates({ industry });
+}
+
+

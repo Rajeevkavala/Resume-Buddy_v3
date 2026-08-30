@@ -1,0 +1,68 @@
+name: Deploy AWS Backend Microservices
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/resume-latex-service/**'
+      - 'apps/websocket/**'
+      - 'infrastructure/docker/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-ec2:
+    name: Build & Deploy to AWS EC2 Graviton
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to AWS EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            echo "🚀 Starting Deployment on AWS EC2 Graviton..."
+            cd /opt/resumebuddy
+            git fetch origin main
+            git reset --hard origin/main
+            
+            echo "📦 Building and starting Docker containers..."
+            docker compose -f infrastructure/docker/docker-compose.prod.yml build --parallel
+            docker compose -f infrastructure/docker/docker-compose.prod.yml up -d
+            
+            echo "🔄 Reloading Nginx..."
+            sudo nginx -t
+            sudo systemctl reload nginx
+            
+            echo "🧹 Pruning dangling Docker images..."
+            docker image prune -f || true
+            echo "✅ Deployment completed on host."
+
+      - name: Verify Microservices Health & Smoke Test
+        run: |
+          echo "🔍 Testing LaTeX Service Health..."
+          LATEX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}/healthz" || echo "000")
+          echo "LaTeX HTTP status: $LATEX_STATUS"
+          if [ "$LATEX_STATUS" != "200" ]; then
+            echo "❌ LaTeX service health check failed with status $LATEX_STATUS" && exit 1
+          fi
+
+          echo "🔍 Testing Socket.io WebSocket Service Polling Handshake..."
+          WS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}/socket.io/?EIO=4&transport=polling" || echo "000")
+          echo "WebSocket HTTP status: $WS_STATUS"
+          if [ "$WS_STATUS" != "200" ]; then
+            echo "❌ WebSocket service health check failed with status $WS_STATUS" && exit 1
+          fi
+
+          echo "🎉 All backend microservices on AWS EC2 Graviton are 100% operational!"

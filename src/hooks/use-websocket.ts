@@ -156,9 +156,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       handler: ServerToClientEvents[K]
     ) => {
       const socket = socketRef.current;
-      if (!socket) return () => {};
-      socket.on(event as string, handler as (...args: unknown[]) => void);
-      return () => socket.off(event as string, handler as (...args: unknown[]) => void);
+      (socket as any).on(event, handler);
+      return () => {
+        (socket as any).off(event, handler);
+      };
     },
     []
   );

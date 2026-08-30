@@ -77,7 +77,12 @@ export type SectionOrder =
   | "skills" 
   | "projects"
   | "experience" 
-  | "educationAndCertifications";
+  | "education"
+  | "certifications"
+  | "educationAndCertifications"
+  | "awards"
+  | "languages"
+  | string;
 
 export type TemplateStructure = {
   sections: SectionOrder[];
@@ -160,8 +165,11 @@ export type ResumeData = {
     title: string;
     issuer: string;
     date: string;
-    description: string;
+    description?: string;
   }[];
+  languages?: Array<{ name: string; proficiency?: string } | string> | any;
+  interests?: string[] | any;
+  customSections?: any;
 };
 
 export type TemplateCustomization = {

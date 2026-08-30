@@ -10,14 +10,14 @@ import { ComponentType } from 'react';
 
 // Helper to create lazy components with consistent loading states
 const createLazyComponent = <T extends object>(
-  importFn: () => Promise<{ default: ComponentType<T> } | { [key: string]: ComponentType<T> }>,
+  importFn: () => Promise<any>,
   exportName?: string,
   LoadingComponent?: ComponentType
 ) =>
   dynamic(
     () =>
-      importFn().then((mod) =>
-        exportName ? { default: (mod as any)[exportName] } : mod
+      importFn().then((mod: any) =>
+        exportName ? { default: mod[exportName] } : (mod.default ? mod : { default: mod })
       ),
     {
       ssr: false,

@@ -660,7 +660,7 @@ export function CreativeTemplate({ resumeData }: CreativeTemplateProps) {
               Languages
             </h3>
             <div className="flex flex-wrap gap-3">
-              {languages.map((lang, index) => (
+              {languages.map((lang: any, index: number) => (
                 <span
                   key={index}
                   className="text-sm px-4 py-2 rounded-full font-medium"

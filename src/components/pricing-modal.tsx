@@ -89,11 +89,7 @@ const FEATURES = [
 // Razorpay Types
 // ============================================================================
 
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
-}
+// Global Razorpay types handled in src/types/razorpay.d.ts
 
 interface RazorpayOptions {
   key: string;

@@ -347,7 +347,7 @@ export default function AnalysisTab({
                                         <div className="flex items-center gap-2">
                                             <AlertTriangle className="h-4 w-4 text-red-500" />
                                             <span className="text-sm font-medium text-red-700 dark:text-red-400">Critical</span>
-                                            <Badge variant="destructive" size="sm" className="text-xs">
+                                            <Badge variant="destructive" className="text-xs">
                                                 {analysis.keywordAnalysis.missingKeywords.filter(skill => skill.criticality === 'Critical').length}
                                             </Badge>
                                         </div>
@@ -438,7 +438,7 @@ export default function AnalysisTab({
                                     <div className="flex items-center gap-2">
                                         <Info className="h-4 w-4 text-gray-500" />
                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-400">Other</span>
-                                        <Badge variant="outline" size="sm" className="text-xs">
+                                        <Badge variant="outline" className="text-xs">
                                             {analysis.keywordAnalysis.missingKeywords.filter(skill => 
                                                 !['Critical', 'High', 'Medium', 'Low'].includes(skill.criticality)
                                             ).length}

@@ -74,7 +74,7 @@ const initialState: SessionState = {
 // ============ HOOK ============
 
 /** Fire-and-forget Firestore persistence — never block the session */
-function persistAsync(fn: () => Promise<void>) {
+function persistAsync(fn: () => Promise<any>) {
   fn().catch((err) => {
     console.warn('[InterviewSession] Persistence failed:', err?.message || err);
   });

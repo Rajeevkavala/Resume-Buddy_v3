@@ -248,7 +248,7 @@ export function ModernSingleColumnTemplate({ data, colorScheme, fonts, className
             Languages
           </h2>
           <div className="flex flex-wrap gap-4">
-            {data.languages.map((lang, idx) => (
+            {data.languages.map((lang: any, idx: number) => (
               <div key={idx} className="text-sm">
                 <span className="font-semibold">{lang.language}:</span> {lang.proficiency}
               </div>

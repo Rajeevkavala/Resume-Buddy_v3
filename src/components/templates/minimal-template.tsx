@@ -437,7 +437,7 @@ export function MinimalTemplate({ resumeData }: MinimalTemplateProps) {
             Languages
           </h2>
           <p className="text-sm" style={{ color: colors.text, fontWeight: 300 }}>
-            {languages.map(lang => `${lang.language} (${lang.proficiency})`).join(' · ')}
+            {languages.map((lang: any) => `${lang.language} (${lang.proficiency})`).join(' · ')}
           </p>
         </section>
       )}

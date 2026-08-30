@@ -25,12 +25,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { BillingSkeleton } from '@/components/ui/page-skeletons';
 
-// Razorpay Types
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
-}
+// Razorpay types declared in src/types/razorpay.d.ts
 
 interface RazorpayOptions {
   key: string;

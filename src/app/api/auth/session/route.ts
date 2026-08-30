@@ -175,7 +175,7 @@ async function cacheUserProfile(userId: string, profile: CachedUserProfile): Pro
 /**
  * Invalidate cached user profile (call after profile updates, subscription changes, etc.)
  */
-export async function invalidateUserProfileCache(userId: string): Promise<void> {
+async function invalidateUserProfileCache(userId: string): Promise<void> {
   try {
     const redis = getRedisClient();
     await redis.del(`${USER_CACHE_PREFIX}${userId}`);

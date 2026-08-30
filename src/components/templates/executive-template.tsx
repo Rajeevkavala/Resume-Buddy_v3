@@ -350,7 +350,7 @@ export function ExecutiveTemplate({ resumeData }: ExecutiveTemplateProps) {
               <h2 className="text-sm font-bold uppercase mb-3 tracking-wider" style={{ color: colors.primary }}>
                 Languages
               </h2>
-              {languages.map((lang, index) => (
+              {languages.map((lang: any, index: number) => (
                 <div key={index} className="text-xs mb-2 font-sans" style={{ color: colors.text }}>
                   <span className="font-semibold">{lang.language}</span>
                   <span style={{ color: colors.lightText }}> – {lang.proficiency}</span>
