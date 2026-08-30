@@ -32,47 +32,66 @@ flowchart TB
         AdminBrowser["Admin Browser\n(monitor.resume-buddy.tech)"]
     end
 
-    subgraph MonitoringPlatform["Monitoring Control Plane (monitor.resume-buddy.tech)"]
-        EdgeAuth["Edge Basic Auth & Reverse Proxy\n(Vercel Edge / Nginx)"]
-        DashboardUI["Observability UI\n(Next.js 16 + React 19 + Tremor/Radix)"]
+    subgraph MonitoringControlPlane["Monitoring Control Plane (monitor.resume-buddy.tech)"]
+        EdgeAuth["Edge Basic Auth & Reverse Proxy\n(Vercel Edge Middleware)"]
+        DashboardUI["Observability UI\n(Next.js 16 + React 19 + Tremor / Radix UI)"]
         MonitorAPI["Monitoring API Server\n(/api/v1/monitor/*)"]
-        SSEHub["Realtime SSE & WebSocket Hub\n(Live Telemetry Broadcaster)"]
-        ProbeWorker["Synthetic & Health Probe Worker\n(Scheduled BullMQ / Cron Engine)"]
+        SSEHub["Realtime SSE Hub\n(Live Telemetry Broadcaster)"]
+        ProbeWorker["Synthetic & Health Probe Worker\n(Scheduled BullMQ / Upstash Engine)"]
         MetricAggregator["Metrics Aggregator & Rollup Engine\n(10s -> 1m -> 1h -> 1d)"]
         AlertManager["Alert & Escalation Engine\n(Multi-channel Router)"]
     end
 
     subgraph MonitoredEcosystem["Resume Buddy Production Ecosystem"]
-        WebEdge["Next.js Frontend & API Gateway\n(www.resume-buddy.tech)"]
-        EC2Microservices["AWS Graviton EC2 (api.resume-buddy.tech)\n├── LaTeX Service (Port 8080)\n└── WebSocket Server (Port 3001)"]
-        SupabaseDB["Supabase PostgreSQL 16\n(Pooler 6543 / Direct 5432)"]
-        UpstashRedis["Upstash Serverless Redis 7\n(TLS Cache & BullMQ)"]
-        S3Storage["AWS S3 Bucket\n(resumebuddy-storage-*)"]
-        AIProviders["Multi-Tier AI Routing Tier\n├── Groq (GPT-OSS / Llama)\n├── OpenRouter (Qwen / DeepSeek)\n├── Google Gemini 2.5 Flash\n└── Sarvam AI (Indic Voice)"]
-        SaaSServices["External SaaS Services\n├── Razorpay (Payments)\n├── Resend (Email)\n└── Twilio (SMS / WhatsApp)"]
+        WebEdge["Next.js Frontend & Edge Gateway\n(www.resume-buddy.tech / Vercel CDN)"]
+        
+        subgraph EC2Host["AWS Graviton EC2 (13.207.140.19 / api.resume-buddy.tech)"]
+            NginxProxy["Nginx Reverse Proxy & SSL\n(Ports 80 / 443)"]
+            LaTeXService["LaTeX Microservice\n(Fastify + Tectonic :8080)"]
+            WSService["WebSocket Gateway\n(Socket.io Server :3001)"]
+        end
+
+        SupabaseDB["Supabase PostgreSQL 16\n(PgBouncer :6543 / Direct :5432)"]
+        UpstashRedis["Upstash Serverless Redis 7\n(TLS Cache & BullMQ Queues)"]
+        S3Storage["AWS S3 Object Storage\n(resumebuddy-storage-277352717671)"]
+        
+        subgraph AITier["Multi-Tier AI Routing Infrastructure"]
+            GroqAI["Tier 1: Groq API\n(GPT-OSS 20B / 120B)"]
+            OpenRouterAI["Tier 2: OpenRouter API\n(Qwen 3.6 / DeepSeek Coder)"]
+            GeminiAI["Tier 3: Google Gemini\n(Gemini 2.5 Flash Fallback)"]
+            SarvamAI["Audio Tier: Sarvam AI\n(Indic Voice Inferences)"]
+        end
+
+        subgraph ExternalSaaS["Third-Party Integrations"]
+            RazorpayAPI["Razorpay API & Webhooks\n(Live Payments)"]
+            ResendAPI["Resend Email API\n(Transactional Mail)"]
+            TwilioAPI["Twilio SMS & Voice\n(2FA OTP & On-Call Alerts)"]
+        end
     end
 
     subgraph NotificationChannels["Alert Notification Channels"]
-        EmailAlerts["Resend Email\n(admin-alerts@resume-buddy.tech)"]
-        SMSAlerts["Twilio SMS & WhatsApp\n(Emergency On-Call Escalation)"]
+        EmailAlerts["Resend Email\n(alerts@resume-buddy.tech)"]
+        SMSAlerts["Twilio SMS & WhatsApp\n(Emergency On-Call)"]
         SlackWebhook["Slack / Discord Ops Webhooks"]
     end
 
     AdminBrowser -->|HTTPS Basic Auth + Admin JWT| EdgeAuth
     EdgeAuth --> DashboardUI
     DashboardUI <-->|REST APIs| MonitorAPI
-    DashboardUI <-->|Server-Sent Events (SSE)| SSEHub
+    DashboardUI <-->|Server-Sent Events SSE| SSEHub
 
-    ProbeWorker -->|Active Health Probes & Synthetics| WebEdge
-    ProbeWorker -->|Probes /healthz & /socket.io| EC2Microservices
-    ProbeWorker -->|Connection & Latency Ping| SupabaseDB
-    ProbeWorker -->|Read/Write/TTL Probe| UpstashRedis
-    ProbeWorker -->|Presigned URL & Read Probe| S3Storage
-    ProbeWorker -->|Inference Ping & Token Est| AIProviders
-    ProbeWorker -->|API Status & Webhook Ping| SaaSServices
+    ProbeWorker -->|Active Probes & Synthetics| WebEdge
+    ProbeWorker -->|Probes /healthz & Compile| NginxProxy
+    NginxProxy --> LaTeXService
+    NginxProxy --> WSService
+    ProbeWorker -->|SQL Probes & Latency Pings| SupabaseDB
+    ProbeWorker -->|RESP PING & Key Probes| UpstashRedis
+    ProbeWorker -->|HeadBucket & Presigned Probes| S3Storage
+    ProbeWorker -->|Inference Ping & Token Est| AITier
+    ProbeWorker -->|API Health Probes| ExternalSaaS
 
-    WebEdge -.->|Push Error Logs & Metrics| MonitorAPI
-    EC2Microservices -.->|Push Container Metrics| MonitorAPI
+    WebEdge -.->|Push Error Logs & Latency Events| MonitorAPI
+    EC2Host -.->|Push Host Metrics & Log Events| MonitorAPI
 
     ProbeWorker --> MetricAggregator
     MetricAggregator --> AlertManager
@@ -85,37 +104,121 @@ flowchart TB
 
 # 2. Deployment Architecture & Network Topography
 
+```mermaid
+flowchart LR
+    subgraph Internet["Public Internet / Admin Network"]
+        AdminUser["SRE / Admin User"]
+    end
+
+    subgraph VercelEdge["Vercel Global Edge Network"]
+        MonitorApp["monitor.resume-buddy.tech\n(Next.js 16 Monitoring App)"]
+        ProdApp["www.resume-buddy.tech\n(Main SaaS App)"]
+    end
+
+    subgraph AWSRegion["AWS ap-south-1 (Mumbai)"]
+        subgraph EC2["AWS Graviton2 EC2 (13.207.140.19)"]
+            Nginx["Nginx Reverse Proxy"]
+            DockerLaTeX["Docker: LaTeX Service (:8080)"]
+            DockerWS["Docker: WebSocket (:3001)"]
+        end
+        S3Bucket["AWS S3 Bucket\n(resumebuddy-storage-*)"]
+    end
+
+    subgraph CloudServices["Managed Cloud & SaaS Providers"]
+        Supabase["Supabase PostgreSQL\n(AWS ap-northeast-2)"]
+        Upstash["Upstash Redis Cluster\n(AWS ap-south-1)"]
+        AIEndpoints["Groq / Gemini / OpenRouter\n(Global Anycast)"]
+    end
+
+    AdminUser -->|HTTPS :443 Basic Auth| MonitorApp
+    MonitorApp -->|HTTPS /api/health| ProdApp
+    MonitorApp -->|HTTPS /healthz| Nginx
+    Nginx --> DockerLaTeX
+    Nginx --> DockerWS
+    MonitorApp -->|Postgres Wire SSL :6543| Supabase
+    MonitorApp -->|TLS TCP :6379| Upstash
+    MonitorApp -->|AWS SigV4 HTTPS| S3Bucket
+    MonitorApp -->|HTTPS REST| AIEndpoints
+```
+
 ### 2.1 Interaction Matrix & Network Routes
 
-| Target Service | Physical Location | Probing Protocol | Network Path & Security | Auth Mechanism |
-|:---|:---|:---|:---|:---|
-| **Frontend Web** | Vercel Edge Global | HTTPS (`/api/health`, `/api/metrics`) | Public Edge CDN (`https://www.resume-buddy.tech`) | Bearer Internal Health Token |
-| **LaTeX Service** | AWS EC2 Graviton (`ap-south-1`) | HTTP/HTTPS (`/healthz`, `/v1/resume/latex/compile`) | Direct EIP (`13.207.140.19`) / `https://api.resume-buddy.tech` | Nginx SSL + Service Secret |
-| **WebSocket Hub** | AWS EC2 Graviton (`ap-south-1`) | WSS / Socket.io Polling Handshake | `https://api.resume-buddy.tech/socket.io/?EIO=4` | Socket handshake payload |
-| **Supabase DB** | Supabase AWS (`ap-northeast-2`) | TCP / Postgres Wire (`SELECT 1;`) | `aws-1-ap-northeast-2.pooler.supabase.com:6543` | SSL SCRAM-SHA-256 (`DATABASE_URL`) |
-| **Upstash Redis** | Upstash AWS (`ap-south-1`) | TLS TCP / Redis RESP (`PING`) | `rediss://together-crawdad-240298.upstash.io:6379` | AUTH Token (`REDIS_PASSWORD`) |
-| **AWS S3 Bucket** | AWS `ap-south-1` | HTTPS REST (HeadBucket / PutObject) | `https://s3.ap-south-1.amazonaws.com` | AWS SigV4 IAM Credentials |
-| **AI Providers** | Cloud APIs (Groq, Gemini, OpenRouter) | HTTPS JSON POST (Minimal Prompt Ping) | Global Anycast REST Endpoints | API Keys (`GROQ_API_KEY`, etc.) |
-| **SaaS Providers** | Razorpay, Resend, Twilio | HTTPS REST Status Probes | Global Vendor APIs | Vendor API Tokens |
+| Target Service | Physical Location | Probing Protocol | Network Path & Security | Auth Mechanism | Telemetry Payload Output |
+|:---|:---|:---|:---|:---|:---|
+| **Frontend Web** | Vercel Edge Global | HTTPS (`/api/health`, `/api/metrics`) | Public Edge CDN (`https://www.resume-buddy.tech`) | Bearer Internal Health Token | Status, route timers, active edge nodes |
+| **LaTeX Service** | AWS EC2 Graviton (`ap-south-1`) | HTTP/HTTPS (`/healthz`, `/v1/resume/latex/compile`) | Direct EIP (`13.207.140.19`) / `https://api.resume-buddy.tech` | Nginx SSL + Service Secret | Uptime, memory RSS, compile duration |
+| **WebSocket Hub** | AWS EC2 Graviton (`ap-south-1`) | WSS / Socket.io Polling Handshake | `https://api.resume-buddy.tech/socket.io/?EIO=4` | Socket handshake payload | Connected sockets, rooms, dropped frames |
+| **Supabase DB** | Supabase AWS (`ap-northeast-2`) | TCP / Postgres Wire (`SELECT 1;`) | `aws-1-ap-northeast-2.pooler.supabase.com:6543` | SSL SCRAM-SHA-256 (`DATABASE_URL`) | Query latency, pooler saturation, deadlocks |
+| **Upstash Redis** | Upstash AWS (`ap-south-1`) | TLS TCP / Redis RESP (`PING`) | `rediss://together-crawdad-240298.upstash.io:6379` | AUTH Token (`REDIS_PASSWORD`) | Memory used, commands/sec, hit ratio |
+| **AWS S3 Bucket** | AWS `ap-south-1` | HTTPS REST (HeadBucket / PutObject) | `https://s3.ap-south-1.amazonaws.com` | AWS SigV4 IAM Credentials | Presigned URL latency, storage size |
+| **AI Providers** | Cloud APIs (Groq, Gemini, OpenRouter) | HTTPS JSON POST (Minimal Prompt Ping) | Global Anycast REST Endpoints | API Keys (`GROQ_API_KEY`, etc.) | Tokens generated, latency, fallback rate |
+| **SaaS Providers** | Razorpay, Resend, Twilio | HTTPS REST Status Probes | Global Vendor APIs | Vendor API Tokens | API status, webhook latency, OTP delivery |
 
 ---
 
-# 3. Comprehensive Service Monitoring Strategy
+# 3. Telemetry Data Lineage ("Where the Info Comes From")
 
-For every service in the ecosystem, the monitoring platform maintains strict probing cadence, failure thresholds, and automatic recovery protocols:
+This section documents the exact sources, log files, system counters, database queries, and response headers that feed into every monitoring widget.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                              PROBING LIFECYCLE STATE MACHINE                           │
+│                              TELEMETRY DATA LINEAGE MAP                                │
 │                                                                                        │
-│   [HEALTHY] ──(1 Failure)──> [DEGRADED] ──(3 Consecutive Failures)──> [DOWN / CRITICAL] │
-│      ▲                              │                                        │         │
-│      │                              └────────(Latency Recovery)──────────────┤         │
-│      └───────────────────────────(2 Consecutive Passes)──────────────────────┘         │
+│  SOURCE CATEGORY        EXACT EXTRACTION MECHANISM               METRIC DERIVED        │
+│  ─────────────────      ───────────────────────────              ──────────────        │
+│  Host OS & Kernel  ──►  Linux /proc/stat & /proc/meminfo   ──►  Host CPU% & RAM        │
+│  Docker Engine     ──►  Docker Engine Unix Socket          ──►  Container RSS & Status │
+│  Nginx Proxy       ──►  stub_status & access.log json      ──►  Active Req/s & 5xx     │
+│  PostgreSQL DB     ──►  pg_stat_activity & statements      ──►  Pool Depth & Slow SQL  │
+│  Upstash Redis     ──►  RESP INFO & CLIENT LIST            ──►  Commands/s & Memory    │
+│  Fastify LaTeX     ──►  GET /healthz & Server-Timing       ──►  Compile p50/p95 (ms)   │
+│  Socket.io Server  ──►  io.engine.clientsCount             ──►  Active WebSockets      │
+│  AI Inference      ──►  usage.total_tokens & Date.now()    ──►  Tokens/s & Cost ($)    │
+│  Browser Clients   ──►  @vercel/speed-insights             ──►  LCP, FID, CLS          │
+│  Payment Webhooks  ──►  POST /api/payments/webhook         ──►  Order Conversion Rate  │
+│  Resend Webhooks   ──►  email.delivered & email.bounced   ──►  Delivery Rate %        │
+│  Twilio Status     ──►  MessageStatus=delivered callback   ──►  OTP Latency (ms)       │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Probing Specifications Table
+### 3.1 Data Lineage Matrix
+
+| Metric Identifier | Exact Data Origin / Source | Extraction Mechanism | Parsing & Calculation Logic |
+|:---|:---|:---|:---|
+| **EC2 CPU & RAM Usage** | EC2 Host `/proc/stat` & `/proc/meminfo` | Scheduled Node probe executing `os.cpus()` and `os.totalmem() - os.freemem()` | `100 - (idle_ticks / total_ticks * 100)` |
+| **Container Status & Restarts**| Docker daemon socket (`/var/run/docker.sock`) | Docker HTTP API `GET /containers/json` | Parse `State.Status`, `State.OOMKilled`, and `RestartCount` |
+| **Nginx Throughput & Status** | Nginx `http_stub_status_module` | `GET http://127.0.0.1/nginx_status` | Regex match: `Active connections`, `accepts handled requests` |
+| **LaTeX Compilation Latency** | Fastify microservice (`services/resume-latex-service`) | Response header `Server-Timing: compile;dur=82.4` and `GET /healthz` | Calculate moving average and p50/p95/p99 histograms |
+| **WebSocket Connection Depth** | Socket.io server (`apps/websocket`) | Internal state: `io.of("/").sockets.size` and `io.sockets.adapter.rooms.size` | Polled via authenticated `GET /metrics` on internal loopback |
+| **Database Pool Saturation** | Supabase PostgreSQL `pg_stat_activity` | Query: `SELECT count(*), state FROM pg_stat_activity GROUP BY state;` | Ratio of active vs idle connections against max pool limit (100) |
+| **Slow Query Identification** | Postgres extension `pg_stat_statements` | Query: `SELECT query, mean_exec_time, calls FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 10;` | Extract SQL statement, average duration, and execution counts |
+| **Redis Cache Efficiency** | Upstash Redis REST / RESP `INFO` | Command: `INFO stats` | `keyspace_hits / (keyspace_hits + keyspace_misses) * 100` |
+| **S3 Storage Footprint** | AWS CloudWatch Metrics / S3 List API | `AWS.CloudWatch.getMetricData({ MetricName: 'BucketSizeBytes' })` | Convert raw bytes to Gigabytes (GB) |
+| **AI Inference Tokens & Cost** | Groq / OpenRouter / Gemini API response | JSON response `usage.prompt_tokens` & `usage.completion_tokens` | `(prompt_tokens * input_rate) + (completion_tokens * output_rate)` |
+| **Core Web Vitals (LCP/FID/CLS)**| Client browsers via `@vercel/speed-insights` | Web Vitals JS API streamed to `/api/v1/telemetry/vitals` | Compute 75th percentile values across user navigations |
+| **Payment Success Ratio** | Razorpay Webhooks (`/api/payments/webhook`) | Event triggers: `payment.captured` vs `payment.failed` | `captured_count / (captured_count + failed_count) * 100` |
+| **Email Deliverability Rate** | Resend Webhook Events (`/api/notifications/webhook`) | Event triggers: `email.delivered`, `email.bounced`, `email.complained` | `delivered_count / total_sent * 100` |
+| **Twilio SMS / WhatsApp Latency**| Twilio Message Resource callbacks | Delta between `date_sent` and `date_updated` upon status `delivered` | Average delivery delta in milliseconds |
+| **TLS Certificate Remaining** | TLS Socket handshake on port 443 | `tls.connect({ host: 'api.resume-buddy.tech', port: 443 })` | `(peerCertificate.valid_to - Date.now()) / (1000 * 60 * 60 * 24)` |
+
+---
+
+# 4. Probing State Machine & Failure Thresholds
+
+```mermaid
+stateDiagram-v2
+    [*] --> HEALTHY: Initialize Monitoring
+    
+    HEALTHY --> DEGRADED: 1 Failed Probe OR Latency > Warning Threshold
+    DEGRADED --> HEALTHY: 2 Consecutive Successful Probes (< Healthy Latency)
+    DEGRADED --> CRITICAL_DOWN: 3 Consecutive Failed Probes OR HTTP 5xx
+    
+    CRITICAL_DOWN --> INVESTIGATING: Alert Dispatched to On-Call (SMS / Slack)
+    INVESTIGATING --> MITIGATED: Hotfix Deployed / Auto-Fallback Active
+    MITIGATED --> HEALTHY: 5 Consecutive Successful Probes
+```
+
+### 4.1 Probing Specifications Table
 
 | Service Identifier | Probed Target & Assertion | Frequency | Timeout | Retry Count | Degraded Threshold | Failure / Critical Condition | Auto-Recovery Condition |
 |:---|:---|:---:|:---:|:---:|:---|:---|:---|
@@ -135,177 +238,183 @@ For every service in the ecosystem, the monitoring platform maintains strict pro
 
 ---
 
-# 4. Comprehensive Dashboard Page Designs
+# 5. UI Wireframes & Screen Layout Blueprints
 
-The dashboard UI at `monitor.resume-buddy.tech` is structured into 18 dedicated views:
+The following wireframes provide exact visual references for frontend engineers implementing the monitoring dashboard in Next.js 16 + Tremor + Radix UI.
+
+### 5.1 Overview / Mission Control Wireframe (`/overview`)
 
 ```text
-monitor.resume-buddy.tech/
-├── /overview                # Realtime Command Center & System Vital Signs
-├── /infrastructure          # AWS EC2 Graviton, CPU, RAM, Disk, Nginx status
-├── /frontend                # Vercel CDN metrics, Core Web Vitals, Edge Latency
-├── /backend                 # LaTeX Engine (Port 8080) & WebSocket Gateway (Port 3001)
-├── /database                # PostgreSQL Pooler connection depth, queries, slow queries
-├── /redis                   # Upstash Redis memory, hit/miss ratios, BullMQ queues
-├── /storage                 # AWS S3 lifecycle, bucket quota, presigned URL metrics
-├── /ai-providers            # Groq, Gemini, OpenRouter, Sarvam availability & tokens
-├── /payments                # Razorpay live transactions, webhooks, failure rates
-├── /notifications           # Resend email deliverability & Twilio SMS/WhatsApp OTPs
-├── /deployments             # GitHub Actions CI/CD runs & Vercel deployment events
-├── /synthetics              # 12 Automated End-to-End user workflow probes
-├── /logs                    # Centralized real-time log stream with search & filters
-├── /incidents               # Active and past outages, root causes, post-mortems
-├── /alerts                  # Alert rule manager, threshold settings, on-call rotation
-├── /audit-logs              # Tamper-evident admin activity log & session history
-├── /user-sessions           # Live active user sessions, geographic traffic map
-└── /settings                # Monitoring intervals, webhook URLs, and escalation policies
++---------------------------------------------------------------------------------------------------------------+
+|  RESUME BUDDY OBSERVABILITY  [LIVE STREAM ●]                     [Prod: ap-south-1]  [Admin: rajeev@tech] [⚙] |
++---------------------------------------------------------------------------------------------------------------+
+|  OVERALL SYSTEM STATUS: [ ● ALL SYSTEMS FULLY OPERATIONAL ]                    Uptime (30d): 99.982%          |
++---------------------------------------------------------------------------------------------------------------+
+|  VITAL METRICS                                                                                                |
+|  +--------------------+  +--------------------+  +--------------------+  +--------------------+  +----------+ |
+|  | Avg API Latency    |  | Active DB Pool     |  | LaTeX Warm Latency |  | Active WebSockets  |  | AI Cost  | |
+|  |   114 ms           |  |   14 / 100         |  |   82 ms            |  |   54 Connected     |  | $2.41/day| |
+|  |   ▲ 2.1% (p95:210ms|  |   ■■■□□□□□□□ (14%) |  |   ▼ 4.2ms vs avg   |  |   12 Active Rooms  |  | 2.8M Tok | |
+|  +--------------------+  +--------------------+  +--------------------+  +--------------------+  +----------+ |
++---------------------------------------------------------------------------------------------------------------+
+|  SERVICE HEALTH MATRIX (REALTIME STATUS & LATENCY)                                                            |
+|  +----------------------------------------------------------------------------------------------------------+ |
+|  | [●] Web App (Vercel Edge)    42ms | [●] LaTeX Engine (Fastify)   82ms | [●] WebSocket Gateway    18ms      | |
+|  | [●] Supabase PostgreSQL      18ms | [●] Upstash Redis            12ms | [●] AWS S3 Storage       94ms      | |
+|  | [●] Groq (Tier 1 AI)        480ms | [●] OpenRouter (Tier 2 AI)  890ms | [●] Gemini 2.5 (Tier 3) 1120ms     | |
+|  | [●] Razorpay Payments       210ms | [●] Resend Email            140ms | [●] Twilio SMS / Voice  310ms      | |
+|  +----------------------------------------------------------------------------------------------------------+ |
++---------------------------------------------------------------------------------------------------------------+
+|  LATENCY COMPARISON SPARKLINE (PAST 24 HOURS)                                                                 |
+|  1200ms |                                                                                                     |
+|   800ms |                                             __/\_ (AI Inference Spike)                              |
+|   400ms |   ----------------------------------------/------\--------------------------- (LaTeX Engine: 82ms)  |
+|     0ms +---+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-------------+ |
+|        00:00 02:00 04:00 06:00 08:00 10:00 12:00 14:00 16:00 18:00 20:00 22:00                               |
++---------------------------------------------------------------------------------------------------------------+
+|  RECENT ALERTS & SYSTEM EVENTS                                                                                |
+|  [ 16:04:12 ] INFO   Synthetic Workflow "LaTeX Resume Compile" passed in 142ms.                              |
+|  [ 15:48:20 ] WARN   Groq Tier 1 response time exceeded 2000ms (2140ms). Auto-fallback evaluated.             |
+|  [ 14:12:05 ] INFO   GitHub Actions Workflow #33306588158 (CI Quality Gate) completed successfully (3m 4s).   |
++---------------------------------------------------------------------------------------------------------------+
 ```
-
-### 4.1 Page Breakdown & UI Layout Specifications
-
-#### 1. Overview Page (`/overview`)
-- **Top Status Banner:** Big visual status badge ("ALL SYSTEMS OPERATIONAL" / "DEGRADED PERFORMANCE" / "SYSTEM OUTAGE").
-- **Metric Cards (Row 1):** Overall Platform Uptime (99.98%), Average API Latency (114ms), Active Database Connections (12/100), Active Redis Memory (14.2 MB), Daily AI Inference Requests (4,821).
-- **Service Health Grid (Row 2):** Realtime pulsing cards for Web, LaTeX, WebSocket, Supabase, Redis, S3, Groq, Gemini, OpenRouter, Razorpay, Resend, Twilio.
-- **Latency Sparklines (Row 3):** 24-hour interactive latency chart comparing Frontend vs LaTeX vs Supabase vs AI Router.
-- **Recent Incidents & Alerts Stream (Row 4):** Live audit feed of recent warning/critical alerts.
-
-#### 2. Infrastructure Page (`/infrastructure`)
-- **Host Metrics:** AWS EC2 Graviton ARM64 (`t4g.small` in `ap-south-1`, EIP `13.207.140.19`).
-- **Realtime Gauges:** CPU Utilization (%), RAM Usage (MB/GB), NVMe Disk I/O, Network In/Out bandwidth.
-- **Docker Container Matrix:** Status, CPU%, Mem%, restart count for `resumebuddy-latex` and `resumebuddy-ws`.
-- **Nginx Reverse Proxy Status:** Active connections, request rate per second, 2xx/4xx/5xx distribution.
-- **SSL / Certificate Tracker:** Days remaining on `api.resume-buddy.tech` (Let's Encrypt automated auto-renewal monitor).
-
-#### 3. Frontend & Edge Page (`/frontend`)
-- **Vercel Edge Telemetry:** Canonical domains (`resume-buddy.tech`, `www.resume-buddy.tech`).
-- **Core Web Vitals:** Largest Contentful Paint (LCP < 1.2s), First Input Delay (FID < 50ms), Cumulative Layout Shift (CLS < 0.05).
-- **Cache Hit Ratio:** Edge CDN cache hit percentage for static assets and SSR routes.
-- **HTTP Error Rate:** Realtime 4xx (Client) and 5xx (Server) error distribution chart.
-
-#### 4. Backend Microservices Page (`/backend`)
-- **LaTeX Compilation Microservice:**
-  - Average compilation duration histogram (p50: 82ms, p95: 160ms, p99: 310ms).
-  - Tectonic cache hit rate (%) & worker memory allocation.
-  - Active compilation queue depth and throughput (PDFs generated per minute).
-- **WebSocket Gateway:**
-  - Connected live socket count, rooms active, real-time interview token streaming rate.
-  - Polling vs WebSocket transport protocol ratio.
-
-#### 5. Database Page (`/database`)
-- **PostgreSQL Pooler (PgBouncer):** Active clients, waiting client connections, server pool utilization.
-- **Query Performance:** Top 10 slowest database queries, average query latency (ms).
-- **Table Metrics:** Row counts for `User` (51+), `Resume` (38+), `InterviewSession`, `Subscription`, `VerificationToken`.
-- **Database Storage & Disk Usage:** Total tablespace utilized vs Supabase quota.
-
-#### 6. Redis & Queues Page (`/redis`)
-- **Upstash Serverless Redis:** Commands per second, hit ratio vs miss ratio, connection count.
-- **BullMQ Background Workers:** Active jobs, completed jobs, delayed jobs, failed jobs in retry backoff.
-- **Rate Limit Telemetry:** Requests throttled per minute, top throttled IP addresses.
-
-#### 7. Cloud Storage Page (`/storage`)
-- **AWS S3 Bucket Metrics:** Total object count, total GB stored in `resumebuddy-storage-277352717671`.
-- **Presigned URL Lifecycle:** Number of presigned upload/download URLs issued per hour, expiration failure rate.
-- **Upload Latencies:** Average time for client-to-S3 document transfer.
-
-#### 8. AI Provider Routing Page (`/ai-providers`)
-- **Provider Performance Comparison Table:**
-  | Provider | Configured Tier | Avg Response Time | Success Rate | Token Consumption (Today) | Cost Est ($) |
-  |---|---|---|---|---|---|
-  | **Groq (GPT-OSS 20B/120B)** | Tier 1 (Primary) | 480ms | 99.7% | 1.84M tokens | $0.82 |
-  | **OpenRouter (Qwen 3.6/Coder)**| Tier 2 (Secondary) | 890ms | 99.2% | 620K tokens | $0.41 |
-  | **Google Gemini 2.5 Flash** | Tier 3 (Fallback) | 1,120ms | 99.9% | 210K tokens | $0.15 |
-  | **Sarvam AI (Voice/Speech)** | Indic Audio | 1,450ms | 98.6% | 140 minutes | $0.70 |
-- **Fallback Trigger Frequency:** Realtime counter of how many times Tier 1 failed over to Tier 2 or Tier 3.
-
-#### 9. Payments & Billing Page (`/payments`)
-- **Razorpay Live Telemetry:** API status, webhook delivery success rate (100%), payment conversion rate.
-- **Order Lifecycle:** Orders created vs payments captured vs payments failed/cancelled.
-- **Subscription Health:** Active Pro subscribers, renewal success rate, churn events.
-
-#### 10. Notifications Page (`/notifications`)
-- **Resend Email:** Delivery rate, bounce rate, spam complaint rate, average time-to-inbox.
-- **Twilio SMS / WhatsApp:** OTP delivery latency, delivery receipt confirmations, carrier failure rates.
-
-#### 11. Deployments & CI/CD Page (`/deployments`)
-- **GitHub Actions Stream:** Realtime build status of `ci.yml`, `deploy-backend.yml`, `security-scan.yml`.
-- **Vercel Deployments:** Live commit hash, deployment preview URLs, build duration logs.
-- **Rollback Trigger Button:** One-click redeployment / rollback to previous healthy Git commit hash.
-
-#### 12. Synthetic Probing Page (`/synthetics`)
-- **User Journey Matrix:** Status, latency history, step-by-step breakdown of all 12 synthetic workflows.
-
-#### 13. Centralized Log Explorer (`/logs`)
-- **Live Stream Viewer:** Unified log stream combining Next.js API logs, EC2 Fastify logs, Nginx access logs, and Prisma query logs.
-- **Log Level Filtering:** `ERROR`, `WARN`, `INFO`, `DEBUG` toggle switches.
-- **Structured JSON Search:** Search by `userId`, `resumeId`, `sessionId`, `httpStatus`, or `errorMessage`.
-
-#### 14. Incident Management (`/incidents`)
-- **Active Outage Desk:** Open incidents, impacted services, timeline of events, assigned SRE engineer, resolution status.
-- **Post-Mortem Generator:** Auto-populated markdown report summarizing outage cause, downtime duration, and mitigation steps.
-
-#### 15. Alert Rules & Escalation (`/alerts`)
-- Threshold configuration sliders, alert suppression/snooze controls, on-call contact details.
-
-#### 16. Audit Logs (`/audit-logs`)
-- Complete immutable record of admin logins, setting modifications, manual service restarts, and alert acknowledgments.
-
-#### 17. User Sessions & Geo Map (`/user-sessions`)
-- Worldwide map displaying active user connections, browser user-agents, and session durations.
-
-#### 18. System Settings (`/settings`)
-- Global probe frequencies, notification webhooks, Basic Auth credential rotations, maintenance mode toggles.
 
 ---
 
-# 5. Dashboard Widget Catalog
+### 5.2 Infrastructure & AWS EC2 Graviton Wireframe (`/infrastructure`)
 
+```text
++---------------------------------------------------------------------------------------------------------------+
+|  INFRASTRUCTURE OBSERVABILITY: AWS EC2 Graviton2 (t4g.small | ap-south-1 | 13.207.140.19)                     |
++---------------------------------------------------------------------------------------------------------------+
+|  HOST RESOURCE UTILIZATION                                                                                    |
+|  +-------------------------+  +-------------------------+  +-------------------------+  +-------------------+ |
+|  | CPU Load (2 vCPUs)      |  | Memory (RAM)            |  | NVMe Storage (Disk)     |  | Network I/O       | |
+|  |       [ 14.2 % ]        |  |   584 MB / 2048 MB      |  |   8.4 GB / 30.0 GB      |  | In:  1.2 MB/s     | |
+|  |  ( ) ( ) User: 8.1%     |  |   [|||||.............]  |  |   [|||||||...........]  |  | Out: 4.8 MB/s     | |
+|  |      System: 6.1%       |  |   28.5% Utilized        |  |   28.0% Utilized        |  | Total: 14.2 GB    | |
+|  +-------------------------+  +-------------------------+  +-------------------------+  +-------------------+ |
++---------------------------------------------------------------------------------------------------------------+
+|  DOCKER CONTAINER RUNTIME (ARM64 LINUX ENGINE)                                                                |
+|  +----------------------+----------+-------------+------------+--------------+-----------+------------------+ |
+|  | Container Name       | Status   | CPU Usage   | Memory RSS | Port Mapping | Restarts  | Uptime           | |
+|  +----------------------+----------+-------------+------------+--------------+-----------+------------------+ |
+|  | resumebuddy-latex    | UP (●)   | 4.2%        | 164 MB     | 127.0.0.1:8080| 0         | 18d 14h 22m      | |
+|  | resumebuddy-ws       | UP (●)   | 1.8%        | 88 MB      | 127.0.0.1:3001| 0         | 18d 14h 22m      | |
+|  +----------------------+----------+-------------+------------+--------------+-----------+------------------+ |
++---------------------------------------------------------------------------------------------------------------+
+|  NGINX REVERSE PROXY & DOMAIN SSL STATUS                                                                      |
+|  +------------------------------------------------------+  +------------------------------------------------+ |
+|  | Nginx Virtual Host Metrics                           |  | SSL Certificate Lifecycle (api.resume-buddy)   | |
+|  | Active Connections: 48                               |  | Issuer: Let's Encrypt Authority - R3           | |
+|  | Total Requests Handled: 1,482,910                    |  | Valid From: 2026-08-30  Valid To: 2026-11-28   | |
+|  | Response Codes: 2xx: 99.4% | 4xx: 0.5% | 5xx: 0.1%   |  | Days Remaining: [ 90 Days ] (Auto-Renew ON)    | |
+|  +------------------------------------------------------+  +------------------------------------------------+ |
++---------------------------------------------------------------------------------------------------------------+
 ```
-┌───────────────────────────┬───────────────────────────┬───────────────────────────┐
-│     Overall Health        │      System Latency       │    Active DB Poolers      │
-│         [ 99.98% ]        │          [ 114ms ]        │         [ 12 / 100 ]      │
-├───────────────────────────┼───────────────────────────┼───────────────────────────┤
-│       EC2 CPU Load        │       EC2 RAM Usage       │      LaTeX Warm Latency   │
-│         [ 14.2% ]         │       [ 412 MB / 2 GB ]   │          [ 82ms ]         │
-├───────────────────────────┼───────────────────────────┼───────────────────────────┤
-│     Redis Memory Used     │    Active WebSockets      │    Daily AI Inferences    │
-│         [ 14.8 MB ]       │          [ 48 ]           │         [ 4,821 ]         │
-├───────────────────────────┼───────────────────────────┼───────────────────────────┤
-│     S3 Storage Quota      │    SSL Expiry Countdown   │    GitHub CI Status       │
-│         [ 2.4 GB ]        │        [ 82 Days ]        │         [ Passing ]       │
-└───────────────────────────┴───────────────────────────┴───────────────────────────┘
-```
-
-### Complete Widget Inventory Table
-
-| Widget Name | Category | Visualization Type | Data Source | Refresh Rate |
-|:---|:---|:---|:---|:---:|
-| **Overall Health Badge** | Vital | Status Pill (Green/Yellow/Red) | Aggregate of all 12 services | 5s |
-| **P50 / P95 / P99 Latency**| Performance | Line Chart with Area fill | Synthetic probes & API metrics | 10s |
-| **EC2 CPU Utilization** | Infrastructure | Radial Gauge (0–100%) | Nginx / Host agent probe | 10s |
-| **EC2 RAM & Swap Usage** | Infrastructure | Stacked Bar Chart | Docker container memory stats | 10s |
-| **LaTeX Service Latency** | Microservice | Single Value + Sparkline | Fastify `/healthz` probe | 10s |
-| **WebSocket Active Sockets**| Realtime | Live Counter + Waveform | Socket.io server connection pool | 5s |
-| **PostgreSQL Pool Depth** | Database | Donut Chart (Active vs Idle) | Supabase PgBouncer stats query | 15s |
-| **Slow Query Monitor** | Database | Sortable Table | `pg_stat_statements` | 60s |
-| **Redis Memory & Keys** | Cache | Gauge + Key Counter | Upstash Redis `INFO` response | 15s |
-| **BullMQ Job Throughput** | Queues | Multi-line Bar Chart | BullMQ Queue counts | 10s |
-| **S3 Storage & Object Count**| Storage | Area Chart over 30 days | AWS CloudWatch / S3 HeadBucket | 1h |
-| **AI Provider Fallback Rate**| AI Routing | Stacked Percent Bar | Smart AI Router fallback counter | 30s |
-| **AI Token Usage & Cost** | Business / AI | Metric Card ($ & Tokens) | Token estimator + AI logs | 5m |
-| **Payment Success Rate** | Billing | Percentage Gauge (Target >98%)| Razorpay Webhook Events | 1m |
-| **Email Deliverability** | Notifications | Progress Bar (Target >99%) | Resend Delivery Status API | 5m |
-| **SMS/WhatsApp OTP Latency**| Notifications | Number Callout (Target <5s) | Twilio Delivery Logs | 5m |
-| **SSL Expiration Days** | Security | Countdown Card (Warning <14d)| TLS Certificate Socket probe | 6h |
-| **DNS Record Health** | Networking | Status Table (Apex, WWW, API)| DNS over HTTPS (DoH) Resolver | 1h |
-| **GitHub Actions Pipeline**| CI/CD | Commit Hash + Status Badge | GitHub REST API (`gh run list`) | 30s |
-| **Error Rate (HTTP 5xx)** | Quality | Threshold Chart (Red if >1%) | Next.js API log stream | 10s |
 
 ---
 
-# 6. End-to-End Synthetic Monitoring Workflows
+### 5.3 Multi-Tier AI Provider Routing Wireframe (`/ai-providers`)
 
-Synthetic monitoring simulates authentic multi-step user operations on production continuously to detect user-facing regressions before real customers experience them.
+```text
++---------------------------------------------------------------------------------------------------------------+
+|  AI ROUTING & INFERENCE TELEMETRY                                                [Active Policy: Cost-Optimal]|
++---------------------------------------------------------------------------------------------------------------+
+|  PROVIDER TIERS & LIVE BENCHMARKS                                                                             |
+|  +-----------------+---------------------+-----------+----------+-----------------+-------------+-----------+ |
+|  | Provider Tier   | Target Model        | Health    | Latency  | Success Rate    | Tokens/Day  | Est. Cost | |
+|  +-----------------+---------------------+-----------+----------+-----------------+-------------+-----------+ |
+|  | Tier 1 (Primary)| Groq / GPT-OSS 20B  | HEALTHY ● | 480 ms   | 99.72% (1 fail) | 1,842,000   | $0.82     | |
+|  | Tier 2 (Secndry)| OpenRouter / Qwen   | HEALTHY ● | 890 ms   | 99.10% (3 fail) |   620,000   | $0.41     | |
+|  | Tier 3 (Fallbck)| Gemini 2.5 Flash    | HEALTHY ● | 1120 ms  | 99.98% (0 fail) |   210,000   | $0.15     | |
+|  | Voice / Audio   | Sarvam AI (Indic)   | HEALTHY ● | 1450 ms  | 98.60% (2 fail) |   140 Mins  | $0.70     | |
+|  +-----------------+---------------------+-----------+----------+-----------------+-------------+-----------+ |
++---------------------------------------------------------------------------------------------------------------+
+|  SMART ROUTER FALLBACK FREQUENCY (PAST 24 HOURS)                                                              |
+|  Total Inferences: 4,821 requests                                                                             |
+|  [■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■□□] 96.8%  |
+|  ■ Tier 1 Handled (4,668)  |  ■ Tier 2 Fallbacks (132)  |  ■ Tier 3 Fallbacks (21)                            |
++---------------------------------------------------------------------------------------------------------------+
+```
+
+---
+
+### 5.4 Synthetic Probing Matrix Wireframe (`/synthetics`)
+
+```text
++---------------------------------------------------------------------------------------------------------------+
+|  SYNTHETIC USER JOURNEY TESTING (12 RECURRING WORKFLOWS)                      [Run All Probes Now ▷]          |
++---------------------------------------------------------------------------------------------------------------+
+|  WORKFLOW PIPELINE STATUS                                                                                     |
+|  +-------------------------------------+-----------+----------+--------------------+------------------------+ |
+|  | Synthetic Workflow Name             | Status    | Duration | Last Execution     | Step Breakdown         | |
+|  +-------------------------------------+-----------+----------+--------------------+------------------------+ |
+|  | 01. Homepage & Public Assets CDN    | PASSED ●  | 62 ms    | 1 min ago (16:09)  | [✓ HTML] [✓ CSS] [✓ JS]| |
+|  | 02. User Login & JWT Signature      | PASSED ●  | 148 ms   | 1 min ago (16:09)  | [✓ Auth] [✓ Set-Cookie]| |
+|  | 03. Full Resume LaTeX PDF Compile   | PASSED ●  | 210 ms   | 1 min ago (16:09)  | [✓ Create] [✓ Compile] | |
+|  | 04. AWS S3 Upload & SHA-256 Check   | PASSED ●  | 185 ms   | 1 min ago (16:09)  | [✓ Sign] [✓ Put] [✓ Get| |
+|  | 05. Multi-Tier AI Prompt & Fallback | PASSED ●  | 540 ms   | 1 min ago (16:09)  | [✓ Groq] [✓ Valid JSON]| |
+|  | 06. WebSocket Handshake & Audio     | PASSED ●  | 88 ms    | 1 min ago (16:09)  | [✓ Connect] [✓ Ping]   | |
+|  | 07. Razorpay Order Creation Flow    | PASSED ●  | 280 ms   | 1 min ago (16:09)  | [✓ OrderID] [✓ Catalog]| |
+|  | 08. Resend Email Delivery Receipt   | PASSED ●  | 310 ms   | 1 min ago (16:09)  | [✓ API] [✓ Delivered]  | |
+|  +-------------------------------------+-----------+----------+--------------------+------------------------+ |
++---------------------------------------------------------------------------------------------------------------+
+|  WORKFLOW DETAIL INSPECTOR: "03. Full Resume LaTeX PDF Compile"                                               |
+|  Step 1: Authenticate Synthetic Runner (POST /api/auth/login)  ...... 42ms  [✓ 200 OK]                        |
+|  Step 2: Initialize Draft Resume in DB (POST /api/resume)       ...... 24ms  [✓ 201 Created ID: res_syn_99]    |
+|  Step 3: Compile Tectonic Binary (POST /v1/resume/latex/compile)..... 144ms [✓ 200 OK Buffer: 48,210 bytes]   |
+|  Step 4: Validate %PDF-1.5 Header Magic Bytes                  ...... 0.2ms [✓ Valid Binary Header]          |
++---------------------------------------------------------------------------------------------------------------+
+```
+
+---
+
+### 5.5 Centralized Realtime Log Explorer Wireframe (`/logs`)
+
+```text
++---------------------------------------------------------------------------------------------------------------+
+|  CENTRALIZED LOG EXPLORER                                                          [Auto-Scroll: ON] [Clear]  |
+|  Filter by Service: [ All Services ▼ ]   Level: [✓ Error] [✓ Warn] [✓ Info] [ Debug]   Search: [ "latex"    ] |
++---------------------------------------------------------------------------------------------------------------+
+| TIME       | SERVICE    | LVL  | TRACE ID     | MESSAGE / STRUCTURED PAYLOAD                                  |
++------------+------------+------+--------------+---------------------------------------------------------------+
+| 16:09:12.4 | web-edge   | INFO | tr_99a8f102  | GET /api/health HTTP/1.1 200 OK - 12.4ms (edge-bom)          |
+| 16:09:10.1 | latex-svc  | INFO | tr_44c1029e  | Compile request completed in 82.1ms (Tectonic warm cache hit) |
+| 16:08:44.2 | ai-router  | WARN | tr_88b1990a  | Groq API returned 429 Too Many Requests - routing to Tier 2   |
+| 16:08:44.8 | ai-router  | INFO | tr_88b1990a  | Tier 2 OpenRouter responded successfully in 740ms (Tokens:280)|
+| 16:07:01.0 | database   | INFO | db_pool_01   | PgBouncer connection pool pruned (Active: 12, Idle: 88)       |
+| 16:05:12.8 | websocket  | INFO | ws_sock_42   | Room 'interview-room-41' closed. Clean socket disconnect.     |
++------------+------------+------+--------------+---------------------------------------------------------------+
+```
+
+---
+
+### 5.6 Incident Management Desk Wireframe (`/incidents`)
+
+```text
++---------------------------------------------------------------------------------------------------------------+
+|  INCIDENT MANAGEMENT DESK                                                     [Create Manual Incident +]     |
+|  Active Incidents: 0  |  Resolved (30d): 2  |  Mean Time to Detect (MTTD): 1.2m  |  MTTR: 14.5m               |
++---------------------------------------------------------------------------------------------------------------+
+|  INCIDENT HISTORY & POST-MORTEM RECORDS                                                                       |
+|  +-----------------+-------------+-------------------------------+---------------+------------+-------------+ |
+|  | Incident ID     | Severity    | Title / Impacted Service      | Duration      | Status     | Post-Mortem | |
+|  +-----------------+-------------+-------------------------------+---------------+------------+-------------+ |
+|  | INC-20260830-01 | P2 - HIGH   | Groq AI Rate Limit Surge      | 8 mins        | RESOLVED ✓ | [View Doc ↗]| |
+|  | INC-20260824-01 | P1 - CRIT   | EC2 Port 8080 Latency Spike   | 21 mins       | RESOLVED ✓ | [View Doc ↗]| |
+|  +-----------------+-------------+-------------------------------+---------------+------------+-------------+ |
++---------------------------------------------------------------------------------------------------------------+
+|  POST-MORTEM VIEWER: INC-20260830-01                                                                          |
+|  Summary: On Aug 30, 2026, Groq Tier 1 returned HTTP 429 for 3 minutes due to upstream quota reset.           |
+|  Mitigation: Smart Router automatically failed over to OpenRouter (Tier 2). User impact: 0 failed requests.   |
+|  Action Items: Increased Groq tier rate limit threshold; added local token bucket rate limiting.             |
++---------------------------------------------------------------------------------------------------------------+
+```
+
+---
+
+# 6. Detailed End-to-End Synthetic Monitoring Workflows
 
 ```mermaid
 sequenceDiagram
@@ -332,109 +441,26 @@ sequenceDiagram
     DB-->>SyntheticBot: Verifies DB Pool Latency (< 100ms)
 ```
 
-### 6.1 Synthetic Test Specifications
+### Complete List of 12 Synthetic Probes
 
-#### Workflow 1: Homepage & Public Asset Availability
-- **Steps:** `GET https://www.resume-buddy.tech` ➔ Assert status 200 ➔ Assert HTML contains `<title>ResumeBuddy` ➔ Assert CSS/JS bundles load with status 200.
-- **Failure Condition:** HTTP status != 200, latency > 2000ms, or missing critical DOM selectors.
-- **Alert Trigger:** P2 Alert if failed 2 consecutive runs.
-
-#### Workflow 2: User Authentication & Token Validation
-- **Steps:** `POST /api/auth/login` with test credentials ➔ Assert JWT cookie received ➔ Verify JWT signature via `jose` ➔ Assert user role and session presence.
-- **Failure Condition:** HTTP status != 200, invalid token signature, or latency > 1500ms.
-- **Alert Trigger:** P1 Critical Alert (Blocks login functionality).
-
-#### Workflow 3: Full Resume Creation & LaTeX PDF Generation Flow
-- **Steps:** Authenticate ➔ `POST /api/resume` (Create draft) ➔ `POST https://api.resume-buddy.tech/v1/resume/latex/compile` with sample LaTeX document ➔ Assert binary buffer starts with `%PDF-1.5` ➔ Assert compilation time < 500ms.
-- **Failure Condition:** Compilation error, HTTP status != 200, or duration > 3000ms.
-- **Alert Trigger:** P1 Critical Alert (Core document value proposition broken).
-
-#### Workflow 4: AWS S3 Object Storage Full Lifecycle
-- **Steps:** Request presigned upload URL from `/api/storage/presigned` ➔ `PUT` test PDF buffer (2KB) directly to AWS S3 ➔ Issue presigned download `GET` ➔ Compare SHA-256 hashes ➔ `DELETE` test object.
-- **Failure Condition:** Hash mismatch, 403 Forbidden, or upload duration > 2500ms.
-- **Alert Trigger:** P1 Critical Alert.
-
-#### Workflow 5: Multi-Tier Smart AI Inference Routing
-- **Steps:** Dispatch standard test prompt ("Improve this resume bullet") to `/api/ai/smart-route` ➔ Verify Primary Model (Groq / GPT-OSS 20B) responds within 1500ms ➔ Inject simulated timeout and verify seamless fallback to Tier 2 (OpenRouter) and Tier 3 (Gemini 2.5 Flash).
-- **Failure Condition:** All 3 tiers fail to return structured JSON.
-- **Alert Trigger:** P1 Critical Alert if all tiers down; P3 Warning if Tier 1 degraded.
-
-#### Workflow 6: Realtime WebSocket Handshake & Audio Signaling
-- **Steps:** Connect WebSocket client to `wss://api.resume-buddy.tech` ➔ Send `join-room` payload ➔ Receive confirmation event ➔ Measure round-trip ping time (< 150ms) ➔ Disconnect cleanly.
-- **Failure Condition:** Handshake failure, connection timeout > 3000ms, or disconnect drops.
-- **Alert Trigger:** P2 Alert (Impacts live mock interviews).
-
-#### Workflow 7: Payment Checkout Initialization
-- **Steps:** `POST /api/payments/create-order` with Pro Plan ID ➔ Assert Razorpay `order_id` returned with format `order_*` ➔ Validate amount matches catalog.
-- **Failure Condition:** Razorpay API connection timeout or auth failure.
-- **Alert Trigger:** P1 Critical Alert (Impacts revenue collection).
-
-#### Workflow 8: Notification Dispatch Pipeline
-- **Steps:** Trigger transactional email test probe via Resend ➔ Query delivery receipt ➔ Trigger SMS OTP probe via Twilio API.
-- **Failure Condition:** API rejection or delivery error.
-- **Alert Trigger:** P2 Alert.
+1. **Homepage & Static Bundles:** Asserts status 200, `<title>ResumeBuddy`, and core CSS/JS bundle loading.
+2. **User Authentication & Session:** Authenticates test user, checks JWT signature via `jose`, asserts HTTP cookie.
+3. **Resume Draft Creation:** Writes test record to Supabase and verifies ID generation.
+4. **LaTeX PDF Compilation:** Compiles LaTeX sample on EC2 port 8080 and verifies `%PDF-1.5` magic bytes.
+5. **AWS S3 Object Lifecycle:** Issues presigned URL, puts 2KB buffer, downloads, verifies SHA-256, and deletes.
+6. **Smart AI Router Inference:** Pings Tier 1 Groq and verifies structured JSON parsing.
+7. **AI Provider Fallback Drill:** Injects artificial timeout to verify Tier 1 ➔ Tier 2 ➔ Tier 3 failover.
+8. **WebSocket Audio Handshake:** Connects WSS socket, joins test room, asserts roundtrip ping < 150ms.
+9. **Razorpay Order Creation:** Pings `/api/payments/create-order` and asserts valid order format `order_*`.
+10. **Resend Email Delivery:** Pings Resend API and verifies delivery receipt callback.
+11. **Twilio SMS OTP:** Dispatches synthetic OTP request and verifies delivery timestamp.
+12. **DNS & SSL Health:** Performs DoH query for apex, www, api, and verifies SSL certificate days remaining > 14.
 
 ---
 
-# 7. Comprehensive Metrics Collection Architecture
+# 7. Alerting & Multi-Channel Escalation Matrix
 
-```mermaid
-flowchart LR
-    subgraph Sources["Metric Sources"]
-        ClientMetrics["Client Web Vitals\n(@vercel/speed-insights)"]
-        ServerMetrics["Next.js Route Timers\n(Server-Timing headers)"]
-        MicroserviceMetrics["LaTeX & WS Fastify Metrics\n(Memory / SLA)"]
-        DBMetrics["Postgres pg_stat_activity\n(Pool depth & queries)"]
-        RedisMetrics["Upstash Redis INFO\n(Memory & IO)"]
-    end
-
-    subgraph CollectionTier["Collection & Aggregation Tier"]
-        CollectorAPI["Telemetry Ingestion API\n(POST /api/v1/telemetry)"]
-        TimeSeriesBuffer["In-Memory Sliding Buffer\n(10s high-res window)"]
-        RollupEngine["Rollup & Aggregation Engine\n(Calculates p50, p95, p99, avg)"]
-    end
-
-    subgraph StorageTier["Telemetry Storage Tier"]
-        RedisTimeSeries["Upstash Redis\n(Live 24-hour buffer)"]
-        PostgresMetrics["Supabase PostgreSQL\n(Hourly/Daily Long-Term Stats)"]
-    end
-
-    Sources --> CollectorAPI
-    CollectorAPI --> TimeSeriesBuffer
-    TimeSeriesBuffer --> RollupEngine
-    RollupEngine --> RedisTimeSeries
-    RollupEngine --> PostgresMetrics
-```
-
-### Metrics Taxonomy Matrix
-
-1. **Frontend & User Experience Metrics:**
-   - Client Response Time (TTFB, LCP, FID, CLS).
-   - Client-side JavaScript errors / unhandled promise rejections.
-   - Page view throughput and route navigation durations.
-2. **Backend & Microservices Metrics:**
-   - Route execution durations (p50, p90, p95, p99).
-   - LaTeX PDF generation duration (ms per page).
-   - WebSocket connection counts, dropped frames, token generation rates.
-3. **Infrastructure & Host Metrics:**
-   - EC2 CPU usage (User %, System %, Idle %).
-   - Resident Set Size (RSS) memory per Docker container.
-   - Nginx active connections, connection read/write rates.
-4. **Database & Cache Metrics:**
-   - Active, idle, and waiting PgBouncer connections.
-   - Transaction commit rate, rollback count, deadlock frequency.
-   - Redis memory consumed, evicted keys, commands/sec.
-5. **Business & Domain KPIs:**
-   - Resumes created, parsed, compiled, and downloaded per hour.
-   - Mock interview sessions initiated and completed.
-   - Conversion rate from Free to Pro tier subscriptions.
-   - Token expenditure per active user.
-
----
-
-# 8. Alerting & Multi-Channel Escalation Matrix
-
-### 8.1 Severity Classifications & SLAs
+### 7.1 Severity Classifications & SLAs
 
 | Severity Level | Definition | Response SLA | Resolution Target | Notification Channels |
 |:---|:---|:---:|:---:|:---|
@@ -443,77 +469,9 @@ flowchart LR
 | **P3 - MEDIUM** | High CPU (> 80%), SSL cert expiring in < 14 days, non-critical background queue delays. | **< 1 Hour** | **< 12 Hours** | Slack `#ops-alerts` + Dashboard Notification |
 | **P4 - LOW / INFO**| Deployment finished, scheduled maintenance, weekly security audit clean. | Informational | N/A | Daily Email Digest + Dashboard Stream |
 
-### 8.2 Detailed Alert Rule Definitions
-
-```text
-┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│                              ALERT TRIGGER & SUPPRESSION RULES                           │
-│                                                                                          │
-│  RULE 1: Web Service 5xx Surge                                                          │
-│  Condition: HTTP 5xx errors > 2% of total requests over 3 consecutive minutes           │
-│  Severity: P1 Critical                                                                   │
-│  Action: Trigger On-Call SMS + Auto-fetch last 50 error traces                           │
-│                                                                                          │
-│  RULE 2: LaTeX Compilation Outage                                                       │
-│  Condition: Probes to /v1/resume/latex/compile fail for 2 consecutive runs (30s)         │
-│  Severity: P1 Critical                                                                   │
-│  Action: Trigger On-Call SMS + Send container restart signal                            │
-│                                                                                          │
-│  RULE 3: Database Pool Exhaustion                                                       │
-│  Condition: PgBouncer active poolers > 90% capacity for > 2 minutes                      │
-│  Severity: P2 High                                                                       │
-│  Action: Slack Notification + Alert DB Administrator                                     │
-│                                                                                          │
-│  RULE 4: AI Tier 1 Degradation                                                           │
-│  Condition: Groq primary endpoint returns 429 / 5xx for > 3 requests in a 1-minute window │
-│  Severity: P3 Medium (System auto-heals via Tier 2 OpenRouter fallback)                  │
-│  Action: Log event + Slack warning                                                       │
-│                                                                                          │
-│  RULE 5: S3 Upload Failure                                                               │
-│  Condition: Synthetic S3 upload probe fails                                             │
-│  Severity: P1 Critical                                                                   │
-│  Action: Trigger On-Call WhatsApp + Email                                                │
-│                                                                                          │
-│  RULE 6: SSL Expiration Warning                                                         │
-│  Condition: Let's Encrypt certificate remaining days < 14                                │
-│  Severity: P3 Medium                                                                     │
-│  Action: Send notification email + verify Certbot renew task                             │
-└──────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
 ---
 
-# 9. Incident Management & Automated Post-Mortem System
-
-### 9.1 Incident Lifecycle Flow
-
-```mermaid
-stateDiagram-v2
-    [*] --> Triggered: Threshold Breached
-    Triggered --> Acknowledged: SRE Confirms via SMS/Dashboard
-    Acknowledged --> Investigating: Diagnosis & Root Cause Analysis
-    Investigating --> Mitigated: Fallback/Hotfix Applied (Service Recovered)
-    Mitigated --> Resolved: Verification Probes Pass for 10 Mins
-    Resolved --> PostMortem: Auto-Generated Incident Report
-    PostMortem --> [*]
-```
-
-### 9.2 Incident Data Schema
-Every incident records:
-1. `id`: Unique identifier (`INC-20260830-01`).
-2. `severity`: `P1`, `P2`, `P3`, `P4`.
-3. `impactedService`: `web`, `latex`, `websocket`, `supabase`, `redis`, `s3`, `ai-router`, `razorpay`.
-4. `title`: Human-readable summary (e.g., "LaTeX Service ARM64 Container Out of Memory").
-5. `startTime`, `acknowledgedTime`, `mitigatedTime`, `resolvedTime`.
-6. `rootCauseCategory`: `Infrastructure`, `Code Regression`, `Third-Party Outage`, `Resource Exhaustion`.
-7. `timeline`: Array of chronological event logs with timestamps.
-8. `postMortemMarkdown`: Generated post-mortem document summarizing timeline, financial impact, token losses, and preventative action items.
-
----
-
-# 10. Security & Authentication Architecture
-
-To ensure the monitoring platform cannot be accessed by unauthorized entities:
+# 8. Security & Authentication Architecture
 
 ```text
                                INCOMING REQUEST
@@ -534,46 +492,9 @@ To ensure the monitoring platform cannot be accessed by unauthorized entities:
                      [ 200 OK: Access Monitor GUI ]
 ```
 
-### 10.1 Layer 1: Edge Basic Auth
-- Secured with environment variables: `MONITOR_ADMIN_USER` and `MONITOR_ADMIN_PASSWORD`.
-- Edge middleware rejects any unauthenticated request with `HTTP 401 Unauthorized` and `WWW-Authenticate: Basic realm="ResumeBuddy Monitor"`.
-
-### 10.2 Layer 2: Admin Role-Based Access Control (RBAC)
-- Validates that the active session token belongs to an administrator whose email is listed in `ADMIN_EMAILS` (e.g., `kavalarajeev34@gmail.com`).
-- Normal users attempting to navigate to `monitor.resume-buddy.tech` are rejected.
-
-### 10.3 Additional Hardening Measures
-- **IP Whitelisting (Optional):** Restricts monitoring routes to known office or VPN CIDR ranges.
-- **Session Lifetime:** Short-lived admin session tokens (TTL: 4 hours) requiring automatic re-authentication.
-- **Audit Logging:** Every read and write action inside the monitoring platform is written to the immutable `MonitorAuditLog` table.
-
 ---
 
-# 11. Monitoring REST & Streaming APIs
-
-The platform exposes dedicated internal endpoints:
-
-```text
-GET    /api/v1/monitor/overview              # Comprehensive platform vital signs & statuses
-GET    /api/v1/monitor/services              # List all monitored services and their current health
-GET    /api/v1/monitor/services/:id/history  # 24h / 7d / 30d latency and uptime history
-GET    /api/v1/monitor/metrics/live          # Live stream of high-resolution 10s metrics
-GET    /api/v1/monitor/synthetics            # Results of the latest synthetic workflow runs
-POST   /api/v1/monitor/synthetics/run        # Trigger an immediate manual synthetic test
-GET    /api/v1/monitor/incidents             # List all active and historical incidents
-POST   /api/v1/monitor/incidents/:id/ack     # Acknowledge an active incident
-POST   /api/v1/monitor/incidents/:id/resolve # Mark an incident as resolved
-GET    /api/v1/monitor/logs                  # Query centralized structured logs with filters
-GET    /api/v1/monitor/deployments           # GitHub Actions and Vercel deployment events
-POST   /api/v1/monitor/alerts/test           # Trigger a test alert to SMS/Email/Slack
-GET    /api/v1/monitor/stream                # Server-Sent Events (SSE) live telemetry feed
-```
-
----
-
-# 12. Database Schema Design (Prisma Data Model)
-
-To retain historical operational telemetry, incidents, and audit trails without polluting the primary application tables, the following relational models are integrated:
+# 9. Database Schema Design (Prisma Data Model)
 
 ```prisma
 // ============================================================================
@@ -698,78 +619,97 @@ model MonitorAuditLog {
 
 ---
 
-# 13. Realtime Telemetry Strategy: SSE vs WebSockets
+# 10. Implementation Work Breakdown & Phased Execution
 
-### Evaluation Matrix
-
-| Criterion | Server-Sent Events (SSE) | WebSockets | Polling (10s interval) | Recommended Choice |
-|:---|:---:|:---:|:---:|:---:|
-| **Server Overhead** | Very Low (HTTP/2 multiplexed) | Low (Persistent TCP socket) | Medium (Repeated HTTP handshakes) | **SSE** |
-| **Vercel Edge Compatibility**| **Native 100% Support** | Requires external WS server | Native 100% Support | **SSE** |
-| **Directionality** | Unidirectional (Server ➔ Client)| Bidirectional | Client-driven | **SSE** (Monitor is 98% telemetry display) |
-| **Reconnection Handling** | Built-in browser auto-reconnect | Custom heartbeat logic needed | N/A | **SSE** |
-| **Firewall & Proxy Traversal**| Standard HTTPS (Port 443) | Can be blocked by enterprise proxies| Standard HTTPS | **SSE** |
-
-### Architectural Decision: Hybrid SSE + Event-Driven REST
-- **Live Stream:** Use **Server-Sent Events (`/api/v1/monitor/stream`)** for high-frequency telemetry (gauges, latency sparklines, live status updates) pushed directly from the server to the browser over standard HTTPS.
-- **User Actions:** Use standard authenticated REST mutations for incident acknowledgement, test alerts, and configuration updates.
-
----
-
-# 14. Data Retention & Rollup Aggregation Strategy
-
-To prevent uncontrolled database growth while keeping high resolution for recent events:
+The entire implementation of the Resume Buddy Monitoring Platform is structured into **7 sequential, production-ready phases**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                              TIERED DATA RETENTION PIPELINE                            │
+│                              7-PHASE IMPLEMENTATION TIMELINE                           │
 │                                                                                        │
-│   [ Live Probes (10s) ]  ──(After 24h)──> [ 1-Minute Rollups ]                         │
-│           │                                      │                                     │
-│     Retained 24 Hours                      Retained 14 Days                            │
-│                                                  │                                     │
-│                                            (After 14d)                                 │
-│                                                  ▼                                     │
-│                                       [ 1-Hour / 1-Day Rollups ]                       │
-│                                                  │                                     │
-│                                            Retained 1 Year                             │
+│   Phase 1: Core Foundation & Edge Basic Auth ────────► Days 1–2 (Estimated: 16h)       │
+│   Phase 2: Autonomous Probing & Telemetry ───────────► Days 3–4 (Estimated: 16h)       │
+│   Phase 3: Realtime SSE Streaming & Overview UI ─────► Days 5–6 (Estimated: 16h)       │
+│   Phase 4: Infrastructure, Database & Cache Views ───► Days 7–8 (Estimated: 16h)       │
+│   Phase 5: 12 Synthetic User Journey Probes ────────► Days 9–10 (Estimated: 16h)      │
+│   Phase 6: Multi-Channel Alerting & Incidents ───────► Days 11–12 (Estimated: 16h)     │
+│   Phase 7: Log Explorer, DNS & Production Hardening ─► Days 13–14 (Estimated: 16h)     │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Retention Schedule Table
-
-| Telemetry Type | Resolution | Retention Duration | Storage Medium | Automated Cleanup Mechanism |
-|:---|:---|:---:|:---|:---|
-| **Raw Live Probes** | 10 seconds | **24 Hours** | Upstash Redis Sliding List | Redis Key TTL expiration (`EX 86400`) |
-| **1-Minute Metrics Rollups**| 1 minute | **14 Days** | PostgreSQL `MonitorMetricRollup` | Automated cron cleanup task (`0 2 * * *`) |
-| **Hourly / Daily Rollups** | 1 hour / 1 day | **365 Days** | PostgreSQL `MonitorMetricRollup` | Retained for SLA & trend reporting |
-| **Synthetic Test Runs** | Per execution (5m) | **30 Days** | PostgreSQL `MonitorSyntheticRun` | Rolling deletion of records > 30d |
-| **Incidents & Post-Mortems**| Event-based | **Permanent (Indefinite)** | PostgreSQL `MonitorIncident` | Never deleted |
-| **Audit Logs** | Event-based | **90 Days** | PostgreSQL `MonitorAuditLog` | Legal & compliance retention policy |
+### Phase 1: Core Foundation, Edge Security & Database Migrations
+- **Objective:** Establish isolated monitoring route hierarchy, edge security, and database tables.
+- **Deliverables:**
+  - Create Prisma migration adding `MonitorServiceHealth`, `MonitorMetricRollup`, `MonitorSyntheticRun`, `MonitorIncident`, `MonitorAuditLog`.
+  - Implement edge Basic Auth middleware (`MONITOR_ADMIN_USER` & `MONITOR_ADMIN_PASSWORD`).
+  - Implement admin RBAC validation checking active JWT against `ADMIN_EMAILS`.
+  - Scaffold `(monitor)` directory layout with Sidebar and Top Navigation.
+- **Verification:** Unauthorized requests receive HTTP 401; valid admin credentials grant dashboard shell.
 
 ---
 
-# 15. Performance & Resource Budget
-
-- **Target Admin Load:** 1 to 10 simultaneous admin dashboard viewers.
-- **Telemetry Overhead:** < 0.2% CPU utilization on the AWS Graviton host and < 1 MB additional RAM footprint on Next.js.
-- **SSE Stream Bandwidth:** Compressed JSON delta frames (~120 bytes per tick) consuming < 1.2 KB/s per connected dashboard.
-- **Probe Concurrency:** Asynchronous non-blocking worker with `Promise.allSettled()` executing all 12 service probes in parallel in under 800ms total wall time.
+### Phase 2: Autonomous Probing Engine & Service Probes
+- **Objective:** Build background health probe workers that test all 12 services in parallel.
+- **Deliverables:**
+  - Create probe handlers in `src/lib/monitor/probes/` for Web, LaTeX, WebSocket, Supabase, Redis, S3, Groq, OpenRouter, Gemini, Razorpay, Resend, Twilio.
+  - Implement `Promise.allSettled()` batch runner with non-blocking execution (<800ms).
+  - Persist probe results to Upstash Redis sliding window buffer.
+- **Verification:** Probes return real status codes, latencies, and healthy/degraded states.
 
 ---
 
-# 16. Deployment Strategy for `monitor.resume-buddy.tech`
+### Phase 3: Realtime SSE Streaming & Overview Dashboard View
+- **Objective:** Stream live telemetry to the browser and build the central Mission Control view.
+- **Deliverables:**
+  - Implement Server-Sent Events endpoint `/api/v1/monitor/stream`.
+  - Build `/overview` page with status badge, 5 vital cards, 12-service status grid, and 24h latency chart.
+  - Integrate Tremor + Radix UI interactive chart primitives.
+- **Verification:** Browser displays live updating gauges and sparklines without page refresh.
 
-### 16.1 Deployment Topography
-The monitoring dashboard can be deployed as an independent sub-application on **Vercel** bound to the subdomain `monitor.resume-buddy.tech`.
+---
 
-### 16.2 DNS Configuration Table (Namify `manage.get.tech`)
+### Phase 4: Infrastructure, Database & Cache Views
+- **Objective:** Build deep observability pages for EC2 host, Supabase DB pooler, and Upstash Redis.
+- **Deliverables:**
+  - Build `/infrastructure` page displaying CPU/RAM radial gauges, Docker container matrix, and Nginx stats.
+  - Build `/database` page displaying PgBouncer pooler saturation and slow queries.
+  - Build `/redis` and `/storage` pages displaying memory usage, BullMQ jobs, and S3 quota.
+- **Verification:** Verified accuracy against `docker stats`, `pg_stat_activity`, and Upstash `INFO`.
 
-| Record Type | Host Name | Target / Destination Value | Suggested TTL | Purpose |
-|:---:|:---:|:---:|:---:|:---|
-| **CNAME** | `monitor` | `cname.vercel-dns.com` | 3600 (1 hr) | Points `monitor.resume-buddy.tech` to Vercel Global Edge |
+---
 
-### 16.3 Required Monitoring Environment Variables
+### Phase 5: 12 Synthetic User Journey Probes
+- **Objective:** Automate synthetic end-to-end user workflows on a 5-minute recurring schedule.
+- **Deliverables:**
+  - Implement 12 synthetic test suites in `src/lib/monitor/synthetics/`.
+  - Build `/synthetics` UI displaying step-by-step progress, duration breakdown, and error logs.
+  - Persist synthetic runs to `MonitorSyntheticRun`.
+- **Verification:** All 12 synthetic workflows complete with green status and accurate latency breakdowns.
+
+---
+
+### Phase 6: Multi-Channel Alerting & Incident Management Desk
+- **Objective:** Automate alert dispatching and provide an active outage response desk.
+- **Deliverables:**
+  - Implement alert rule evaluator with 3-consecutive-failure hysteresis and 30-minute deduplication.
+  - Integrate Resend Email and Twilio SMS/WhatsApp dispatchers.
+  - Build `/incidents` page with incident triage cards, SLA timers, acknowledgment buttons, and automated Markdown post-mortem generators.
+- **Verification:** Triggered test alert successfully delivers SMS, Email, and creates incident in DB.
+
+---
+
+### Phase 7: Centralized Log Explorer, DNS Configuration & Production Hardening
+- **Objective:** Complete the platform with structured log streaming, DNS setup, and security audits.
+- **Deliverables:**
+  - Build `/logs` page with log stream virtualized viewer, level filters, and search.
+  - Implement automated daily rollup cron task (`0 2 * * *`) aggregating 1m ➔ 1h ➔ 1d metrics.
+  - Add CNAME record `monitor` ➔ `cname.vercel-dns.com` in Namify DNS.
+  - Execute end-to-end chaos test (simulating service restart and validating automated recovery).
+- **Verification:** `https://monitor.resume-buddy.tech` is live, SSL secured, and operational.
+
+---
+
+# 11. Environment Configuration Template
 
 ```env
 # ==============================================================================
@@ -816,125 +756,3 @@ ALERT_PHONE_NUMBER="+919876543210"
 RAZORPAY_KEY_ID="YOUR_RAZORPAY_KEY_ID"
 RAZORPAY_KEY_SECRET="YOUR_RAZORPAY_KEY_SECRET"
 ```
-
----
-
-# 17. Proposed Project Folder Structure
-
-```text
-src/
-├── app/
-│   └── (monitor)/
-│       ├── layout.tsx                     # Global Monitor shell with Sidebar & Top Nav
-│       ├── page.tsx                       # Redirects to /overview
-│       ├── overview/page.tsx              # Main Mission Control Dashboard
-│       ├── infrastructure/page.tsx        # EC2 Graviton & Nginx metrics
-│       ├── frontend/page.tsx              # Vercel Edge & Core Web Vitals
-│       ├── backend/page.tsx               # LaTeX Service & WebSocket Gateway
-│       ├── database/page.tsx              # Supabase PostgreSQL Pooler stats
-│       ├── redis/page.tsx                 # Upstash Redis & BullMQ
-│       ├── storage/page.tsx               # AWS S3 Storage metrics
-│       ├── ai-providers/page.tsx          # Multi-tier AI Router telemetry
-│       ├── payments/page.tsx              # Razorpay checkout & webhook health
-│       ├── notifications/page.tsx         # Resend & Twilio deliverability
-│       ├── deployments/page.tsx           # GitHub Actions CI & Vercel builds
-│       ├── synthetics/page.tsx            # Synthetic E2E user test matrix
-│       ├── logs/page.tsx                  # Realtime structured log explorer
-│       ├── incidents/page.tsx             # Active incident desk & post-mortems
-│       ├── alerts/page.tsx                # Alert thresholds & on-call policies
-│       ├── audit-logs/page.tsx            # Tamper-evident admin action log
-│       └── settings/page.tsx              # Probe frequencies & integration keys
-│
-├── components/
-│   └── monitor/
-│       ├── ui/                            # Tremor & Radix UI visualization primitives
-│       ├── status-badge.tsx               # Animated pulsing status indicator
-│       ├── latency-chart.tsx              # Interactive SVG latency sparklines
-│       ├── incident-card.tsx              # Incident triage card with Ack button
-│       ├── synthetic-stepper.tsx          # Step-by-step workflow timeline
-│       ├── live-log-viewer.tsx            # Virtualized high-speed log viewer
-│       ├── gauge-widget.tsx               # Radial CPU/Memory utilization gauge
-│       └── metric-card.tsx                # Metric callout with delta indicators
-│
-├── lib/
-│   └── monitor/
-│       ├── probes/                        # Autonomous probe executors
-│       │   ├── web.probe.ts               # Next.js frontend HTTP probe
-│       │   ├── latex.probe.ts             # LaTeX compilation probe
-│       │   ├── websocket.probe.ts         # Socket.io handshake probe
-│       │   ├── database.probe.ts          # Postgres pooler query probe
-│       │   ├── redis.probe.ts             # Upstash Redis latency probe
-│       │   ├── s3.probe.ts                # S3 object upload/download probe
-│       │   └── ai.probe.ts                # Smart AI router fallback probe
-│       ├── synthetics/                    # 12 End-to-End synthetic workflows
-│       ├── alerts/                        # Alert rule evaluator & notification dispatcher
-│       ├── sse/                           # Server-Sent Events subscription hub
-│       └── rollup.ts                      # 1m/1h/1d statistical aggregation engine
-│
-└── types/
-    └── monitor.ts                         # Complete TypeScript domain contracts
-```
-
----
-
-# 18. Technology Choices & Justifications
-
-| Layer | Recommended Technology | Justification / Trade-off Analysis |
-|:---|:---|:---|
-| **Framework** | Next.js 16 + React 19 App Router | Leverages existing repository tech stack, server components, and native Vercel Edge performance. |
-| **Charts & Graphs** | Tremor (`@tremor/react`) + Recharts | Purpose-built for enterprise observability dashboards with dark-mode support and clean aesthetics. |
-| **Component Primitives**| Radix UI + Tailwind CSS | Ultra-responsive, accessible, and matches Resume Buddy's premium UI standard. |
-| **State Management** | TanStack Query v5 (React Query) | Efficient client-side caching, polling sync, and optimistic UI updates for incident triage. |
-| **Realtime Transport** | Server-Sent Events (SSE) | Native HTTP/2 streaming over standard HTTPS port 443 with built-in reconnect logic; zero WebSocket server maintenance required. |
-| **Scheduling Engine** | BullMQ + Upstash Redis | Robust cron scheduling with exponential backoff and distributed lock support to prevent duplicate probes. |
-| **ORM & Data Access** | Prisma ORM 6.19 | Type-safe migrations and queries natively integrated with existing PostgreSQL database. |
-| **Alert Routing** | Resend API + Twilio SDK | Uses existing production-verified credentials for instant multi-channel email/SMS escalations. |
-
----
-
-# 19. Phased Implementation Roadmap
-
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                              7-PHASE IMPLEMENTATION ROADMAP                            │
-│                                                                                        │
-│   Phase 1: Core Dashboard & Health Probes ───────────► Days 1–2 (48h)                  │
-│   Phase 2: Realtime SSE Telemetry & Infrastructure ──► Days 3–4 (48h)                  │
-│   Phase 3: Synthetic User Journey Probing ───────────► Days 5–6 (48h)                  │
-│   Phase 4: Multi-Channel Alerting & On-Call ────────► Days 7–8 (48h)                  │
-│   Phase 5: Incident Management & Post-Mortems ───────► Days 9–10 (48h)                 │
-│   Phase 6: Log Explorer & Historical Analytics ──────► Days 11–12 (48h)                │
-│   Phase 7: Production Hardening & DNS Setup ─────────► Days 13–14 (48h)                │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Phase Details:
-1. **Phase 1 (Core Dashboard & Service Probes):** Implement edge Basic Auth, service probe engines for Web, LaTeX, WebSocket, DB, Redis, S3, and the `/overview` dashboard view.
-2. **Phase 2 (Realtime Telemetry & Infrastructure):** Connect SSE streaming hub, integrate host CPU/RAM/Disk metrics for EC2 Graviton, and build `/infrastructure`, `/database`, `/redis`, `/storage` pages.
-3. **Phase 3 (Synthetic User Journey Probing):** Implement 12 synthetic test suites (Resume generation, LaTeX compilation, S3 upload, AI fallback) on 5-minute recurring timers.
-4. **Phase 4 (Alerting & Multi-Channel Escalation):** Implement threshold evaluator, connect Resend Email and Twilio SMS/WhatsApp dispatchers with alert de-duplication and suppression.
-5. **Phase 5 (Incident Management Desk):** Build `/incidents` triage interface, SLA timers, acknowledgment buttons, and automated Markdown post-mortem generators.
-6. **Phase 6 (Centralized Log Explorer & Analytics):** Stream structured JSON logs, implement multi-field search, and configure 1m/1h/1d statistical rollups.
-7. **Phase 7 (Production Hardening & DNS Setup):** Configure `monitor.resume-buddy.tech` CNAME record in Namify DNS, verify SSL certificates, and execute end-to-end failure simulation drills.
-
----
-
-# 20. Risk Analysis & Mitigation Matrix
-
-| Identified Risk | Risk Severity | Potential Impact | Engineering Mitigation Strategy |
-|:---|:---:|:---|:---|
-| **Monitoring Probe Storm** | Medium | Probes overwhelming production database or Redis poolers. | Enforce strict rate limits on probes, use lightweight `SELECT 1;` queries, and reuse connection pools. |
-| **Alert Fatigue** | High | SREs ignoring notifications due to excessive false-positive alerts. | Implement **3-consecutive-failure hysteresis** before triggering P1 alerts; add 30-minute alert deduplication windows. |
-| **Monitoring Outage During Failure** | High | Inability to diagnose production if monitoring runs on same cluster. | Host monitoring control plane on Vercel Edge, completely isolated from AWS EC2 compute instances. |
-| **Credential Leak via Telemetry** | High | Health payloads exposing database passwords or API keys. | Enforce strict schema validation stripping all auth headers and secret values before logging or streaming. |
-| **Synthetic Test Data Pollution** | Medium | Synthetic test users polluting production metrics and analytics. | Tag synthetic test users with `is_synthetic: true` and exclude them from production business reports. |
-
----
-
-# 21. Production-Grade Nice-to-Have Capabilities
-
-1. **AI Model Performance Leaderboard:** Automatic benchmarking comparing Groq vs OpenRouter vs Gemini for response latency, cost per 1K tokens, and markdown formatting accuracy.
-2. **One-Click Hot Reload & Restart:** Admin button dispatching an authenticated webhook to EC2 to restart `resumebuddy-latex` or `resumebuddy-ws` Docker containers without SSHing.
-3. **SLA & Uptime Certificates:** Publicly shareable or PDF-exportable 99.9% uptime compliance certificates for enterprise users.
-4. **Interactive Read-Only Terminal:** Web-based terminal emulator allowing on-call engineers to run pre-approved diagnostic commands (`docker ps`, `nginx -t`, `df -h`) directly from the dashboard.
-5. **Dark Mode & PWA Support:** Mobile-friendly progressive web app allowing on-call engineers to triage incidents and acknowledge alerts from smartphones.
