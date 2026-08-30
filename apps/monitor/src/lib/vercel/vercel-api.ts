@@ -1,8 +1,8 @@
 import type { VercelDeployment, VercelSpeedInsights, VercelEdgeStats } from "@/types/monitor";
 
-const VERCEL_TOKEN = process.env.VERCEL_TOKEN || "";
-const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID || "";
-const VERCEL_ORG_ID = process.env.VERCEL_ORG_ID || "";
+const VERCEL_TOKEN = process.env.VERCEL_API_TOKEN || process.env.MONITOR_VERCEL_TOKEN || process.env.VERCEL_TOKEN || "";
+const VERCEL_PROJECT_ID = process.env.VERCEL_TARGET_PROJECT_ID || process.env.VERCEL_PROJECT_ID || "";
+const VERCEL_ORG_ID = process.env.VERCEL_TARGET_ORG_ID || process.env.VERCEL_ORG_ID || "";
 const BASE_URL = "https://api.vercel.com";
 
 function vercelHeaders() {

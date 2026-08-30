@@ -41,7 +41,7 @@ export default async function FrontendPage() {
   const deployments = deploymentsResult.status === "fulfilled" ? deploymentsResult.value : [];
   const insights = insightsResult.status === "fulfilled" ? insightsResult.value : null;
   const activeDeployment = deployments.find((d) => d.state === "READY");
-  const projectId = process.env.VERCEL_PROJECT_ID || "resume-buddy-v3";
+  const projectId = process.env.VERCEL_TARGET_PROJECT_ID || process.env.VERCEL_PROJECT_ID || "resume-buddy-v3";
   const prodDomain = (() => {
     try {
       return new URL(process.env.NEXT_PUBLIC_VERCEL_PROD_URL || "https://www.resume-buddy.tech").hostname;

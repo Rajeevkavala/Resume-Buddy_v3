@@ -15,13 +15,17 @@ let s3ClientInstance: S3Client | null = null;
 
 function getS3Client(): S3Client {
   if (!s3ClientInstance) {
+    const accessKeyId = process.env.APP_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.APP_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+    const region = process.env.APP_AWS_REGION || process.env.AWS_REGION || "ap-south-1";
+
     s3ClientInstance = new S3Client({
-      region: process.env.AWS_REGION || "ap-south-1",
+      region,
       credentials:
-        process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+        accessKeyId && secretAccessKey
           ? {
-              accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+              accessKeyId,
+              secretAccessKey,
             }
           : undefined,
     });

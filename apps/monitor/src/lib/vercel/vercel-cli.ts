@@ -3,7 +3,7 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
-const VERCEL_TOKEN = process.env.VERCEL_TOKEN || "";
+const VERCEL_TOKEN = process.env.VERCEL_API_TOKEN || process.env.MONITOR_VERCEL_TOKEN || process.env.VERCEL_TOKEN || "";
 
 function buildVercelCmd(subcommand: string): string {
   return `npx vercel ${subcommand} --token=${VERCEL_TOKEN} --yes`;

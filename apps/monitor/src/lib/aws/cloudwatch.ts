@@ -13,10 +13,10 @@ import type {
 // ─── CloudWatch Client (ap-south-1) ──────────────────────────────────────────
 
 const cwClient = new CloudWatchClient({
-  region: process.env.AWS_REGION || "ap-south-1",
+  region: process.env.APP_AWS_REGION || process.env.AWS_REGION || "ap-south-1",
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    accessKeyId: (process.env.APP_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID)!,
+    secretAccessKey: (process.env.APP_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY)!,
   },
 });
 

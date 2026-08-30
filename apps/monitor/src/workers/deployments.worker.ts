@@ -21,8 +21,8 @@ export class DeploymentWorker extends BaseMonitoringWorker {
     errorMessage?: string;
     data?: Record<string, unknown>;
   }> {
-    const token = process.env.VERCEL_TOKEN;
-    const projectId = process.env.VERCEL_PROJECT_ID;
+    const token = process.env.VERCEL_API_TOKEN || process.env.MONITOR_VERCEL_TOKEN || process.env.VERCEL_TOKEN;
+    const projectId = process.env.VERCEL_TARGET_PROJECT_ID || process.env.VERCEL_PROJECT_ID;
     const start = Date.now();
 
     if (!token) {
