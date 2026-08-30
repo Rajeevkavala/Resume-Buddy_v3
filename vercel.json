@@ -8,6 +8,11 @@
   "github": {
     "silent": true
   },
+  "functions": {
+    "src/app/**/*": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/api/(.*)",

@@ -1,0 +1,46 @@
+{
+  "source": "resumeData",
+  "templateId": "faang",
+  "resumeData": {
+    "personalInfo": {
+      "fullName": "RAJEEV KAVALA",
+      "email": "rajeev.kavala@email.com",
+      "phone": "+1 (555) 123-4567",
+      "location": "San Francisco, CA"
+    },
+    "summary": "Full-stack developer with 5+ years of experience building scalable web applications.",
+    "skills": {
+      "languages": ["Python", "JavaScript", "TypeScript"],
+      "frameworks": ["React", "Next.js", "Express"],
+      "tools": ["Docker", "AWS", "Git"],
+      "databases": ["PostgreSQL", "Redis"]
+    },
+    "experience": [
+      {
+        "title": "Senior Software Engineer",
+        "company": "TechCorp Inc.",
+        "startDate": "Jan 2022",
+        "endDate": null,
+        "current": true,
+        "location": "San Francisco, CA",
+        "achievements": [
+          "Led development of microservices architecture serving 10M+ users",
+          "Reduced API latency by 40% through caching and optimization"
+        ]
+      }
+    ],
+    "projects": [],
+    "education": [
+      {
+        "degree": "B.S. Computer Science",
+        "institution": "Stanford University",
+        "graduationDate": "May 2019"
+      }
+    ]
+  },
+  "options": {
+    "engine": "tectonic",
+    "return": ["latex", "pdf"],
+    "fileBaseName": "Rajeev-Kavala-Resume"
+  }
+}

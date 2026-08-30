@@ -27,8 +27,8 @@ export class RateLimiter {
   constructor(config: Partial<RateLimitConfig> = {}) {
     this.config = {
       windowMs: config.windowMs ?? 60_000,        // 1 minute window
-      maxRequests: config.maxRequests ?? 10,      // 10 requests per minute
-      blockDurationMs: config.blockDurationMs ?? 60_000, // Block for 1 minute
+      maxRequests: config.maxRequests ?? 60,      // 60 requests per minute
+      blockDurationMs: config.blockDurationMs ?? 30_000, // Block for 30s
     };
 
     // Cleanup old entries every minute
@@ -157,9 +157,9 @@ export class RateLimiter {
   }
 }
 
-// Singleton instance with conservative limits for 500 users
+// Singleton instance with generous limits for production reverse proxy traffic
 export const rateLimiter = new RateLimiter({
-  windowMs: 60_000,       // 1 minute window
-  maxRequests: 10,        // 10 PDFs per minute per IP
-  blockDurationMs: 60_000, // Block for 1 minute after exceeding
+  windowMs: 60_000,        // 1 minute window
+  maxRequests: 60,         // 60 PDFs per minute per IP
+  blockDurationMs: 30_000, // Block for 30 seconds after exceeding
 });

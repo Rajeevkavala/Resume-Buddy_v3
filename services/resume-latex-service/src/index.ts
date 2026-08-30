@@ -9,9 +9,9 @@ import { rateLimiter } from './rate-limiter.js';
 const port = Number(process.env.PORT ?? '8080');
 const host = process.env.HOST ?? '0.0.0.0';
 
-// Performance tuning for 500 users on DigitalOcean
-const CONNECTION_TIMEOUT = 30_000; // 30s
-const KEEP_ALIVE_TIMEOUT = 65_000; // Slightly higher than ALB default (60s)
+// Performance tuning for Graviton EC2 backend
+const CONNECTION_TIMEOUT = 120_000; // 2 min (matches compilation timeout)
+const KEEP_ALIVE_TIMEOUT = 125_000; // Slightly higher than connection timeout
 const REQUEST_TIMEOUT = 120_000; // 2 min max for PDF compilation
 
 /**
