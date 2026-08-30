@@ -1,21 +1,9 @@
 {
   "version": 2,
   "name": "resume-buddy-monitor",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ],
+  "framework": "nextjs",
+  "regions": ["bom1"],
   "env": {
     "NODE_ENV": "production"
-  },
-  "regions": ["bom1"],
-  "framework": "nextjs"
+  }
 }

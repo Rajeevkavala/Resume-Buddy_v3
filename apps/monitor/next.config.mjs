@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
   reactStrictMode: true,
   serverExternalPackages: ["pg", "ioredis", "twilio"],
   // Security headers for the monitoring dashboard
