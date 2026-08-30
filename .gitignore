@@ -58,3 +58,17 @@ packages/database/prisma/migrations/*.sql
 
 # video app
 apps/video/
+
+# Salesforce DX
+.sfdx/
+.sfdx
+
+# Markdown files
+*.md
+
+# Agents and skills
+.agents/
+AGENTS.md
+agents.md
+skills-lock.json
+

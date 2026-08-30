@@ -32,10 +32,16 @@ RUN apt-get update -y \
   ; rm -rf /var/lib/apt/lists/* \
   ; apt-get clean
 
-# Install tectonic (static binary)
+# Install tectonic (static binary) - architecture aware (x86_64 & aarch64/ARM64)
 # Pin version to keep builds reproducible.
 ARG TECTONIC_VERSION=0.15.0
-RUN curl -fsSL "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+RUN ARCH=$(uname -m) && \
+  if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+    TECTONIC_ARCH="aarch64-unknown-linux-musl"; \
+  else \
+    TECTONIC_ARCH="x86_64-unknown-linux-gnu"; \
+  fi && \
+  curl -fsSL "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-${TECTONIC_ARCH}.tar.gz" \
   | tar -xz -C /usr/local/bin tectonic \
   && chmod +x /usr/local/bin/tectonic
 
