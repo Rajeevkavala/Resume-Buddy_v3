@@ -1,8 +1,6 @@
 
 'use server';
 
-export const maxDuration = 60;
-
 import {z} from 'zod';
 import {analyzeResumeContent} from '@/ai/flows/analyze-resume-content';
 import type { GenerateInterviewQuestionsInput } from '@/ai/flows/generate-interview-questions';

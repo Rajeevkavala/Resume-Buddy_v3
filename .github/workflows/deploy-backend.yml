@@ -52,14 +52,14 @@ jobs:
       - name: Verify Microservices Health & Smoke Test
         run: |
           echo "🔍 Testing LaTeX Service Health..."
-          LATEX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}/healthz" || echo "000")
+          LATEX_STATUS=$(curl -sL -k -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}/healthz" || echo "000")
           echo "LaTeX HTTP status: $LATEX_STATUS"
           if [ "$LATEX_STATUS" != "200" ]; then
             echo "❌ LaTeX service health check failed with status $LATEX_STATUS" && exit 1
           fi
 
           echo "🔍 Testing Socket.io WebSocket Service Polling Handshake..."
-          WS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}/socket.io/?EIO=4&transport=polling" || echo "000")
+          WS_STATUS=$(curl -sL -k -o /dev/null -w "%{http_code}" "http://${{ secrets.EC2_HOST }}/socket.io/?EIO=4&transport=polling" || echo "000")
           echo "WebSocket HTTP status: $WS_STATUS"
           if [ "$WS_STATUS" != "200" ]; then
             echo "❌ WebSocket service health check failed with status $WS_STATUS" && exit 1
