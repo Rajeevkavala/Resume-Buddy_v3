@@ -18,9 +18,9 @@ export default function SettingsPage() {
   const envVars: Array<[string, string | undefined]> = [
     ["MONITOR_ADMIN_USER", process.env.MONITOR_ADMIN_USER],
     ["MONITOR_ADMIN_PASSWORD", process.env.MONITOR_ADMIN_PASSWORD],
-    ["VERCEL_API_TOKEN", process.env.VERCEL_API_TOKEN || process.env.MONITOR_VERCEL_TOKEN || process.env.VERCEL_TOKEN],
-    ["VERCEL_TARGET_PROJECT_ID", process.env.VERCEL_TARGET_PROJECT_ID || process.env.VERCEL_PROJECT_ID],
-    ["VERCEL_TARGET_ORG_ID", process.env.VERCEL_TARGET_ORG_ID || process.env.VERCEL_ORG_ID],
+    ["V_API_TOKEN", process.env.V_API_TOKEN || process.env.VERCEL_API_TOKEN || process.env.VERCEL_TOKEN],
+    ["V_TARGET_PROJECT_ID", process.env.V_TARGET_PROJECT_ID || process.env.VERCEL_TARGET_PROJECT_ID || process.env.VERCEL_PROJECT_ID],
+    ["V_TARGET_ORG_ID", process.env.V_TARGET_ORG_ID || process.env.VERCEL_TARGET_ORG_ID || process.env.VERCEL_ORG_ID],
     ["AWS_EC2_INSTANCE_ID", process.env.AWS_EC2_INSTANCE_ID],
     ["AWS_ACCESS_KEY_ID", process.env.APP_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID],
     ["DATABASE_URL", process.env.DATABASE_URL],

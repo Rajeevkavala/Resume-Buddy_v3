@@ -24,7 +24,7 @@ export default async function DeploymentsPage() {
 
         {deployments.length === 0 ? (
           <p className="text-xs text-slate-600">
-            Configure VERCEL_TOKEN and VERCEL_PROJECT_ID to see deployment history.
+            Configure V_API_TOKEN and V_TARGET_PROJECT_ID to see deployment history.
           </p>
         ) : (
           <table className="monitor-table">

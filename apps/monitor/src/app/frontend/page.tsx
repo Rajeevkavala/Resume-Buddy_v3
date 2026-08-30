@@ -41,7 +41,7 @@ export default async function FrontendPage() {
   const deployments = deploymentsResult.status === "fulfilled" ? deploymentsResult.value : [];
   const insights = insightsResult.status === "fulfilled" ? insightsResult.value : null;
   const activeDeployment = deployments.find((d) => d.state === "READY");
-  const projectId = process.env.VERCEL_TARGET_PROJECT_ID || process.env.VERCEL_PROJECT_ID || "resume-buddy-v3";
+  const projectId = process.env.V_TARGET_PROJECT_ID || process.env.VERCEL_TARGET_PROJECT_ID || process.env.VERCEL_PROJECT_ID || "resume-buddy-v3";
   const prodDomain = (() => {
     try {
       return new URL(process.env.NEXT_PUBLIC_VERCEL_PROD_URL || "https://www.resume-buddy.tech").hostname;
@@ -98,7 +98,7 @@ export default async function FrontendPage() {
           ) : (
             <p className="text-xs text-slate-600">
               {deployments.length === 0
-                ? "Configure VERCEL_TOKEN to see deployment data"
+                ? "Configure V_API_TOKEN to see deployment data"
                 : "No READY deployment found"}
             </p>
           )}
@@ -162,7 +162,7 @@ export default async function FrontendPage() {
         </div>
         {!insights && (
           <p className="text-xs text-slate-600 mt-2">
-            Speed Insights require VERCEL_TOKEN + VERCEL_PROJECT_ID to be configured.
+            Speed Insights require V_API_TOKEN + V_TARGET_PROJECT_ID to be configured.
           </p>
         )}
       </div>
@@ -173,7 +173,7 @@ export default async function FrontendPage() {
           Recent Deployments
         </div>
         {deployments.length === 0 ? (
-          <p className="text-xs text-slate-600">Configure VERCEL_TOKEN to see deployments.</p>
+          <p className="text-xs text-slate-600">Configure V_API_TOKEN to see deployments.</p>
         ) : (
           <table className="monitor-table">
             <thead>
