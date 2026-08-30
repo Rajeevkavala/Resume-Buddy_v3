@@ -30,7 +30,7 @@ All **13 production services and API suites passed validation** with 0 errors.
 ✅ [AI        ] Sarvam AI (Speech/Indic LLM)                  |    0ms | API Key active: sk_e00xks3...
 ✅ [Email     ] Resend Email API                              |  713ms | Resend API Key authenticated successfully (Verified against Resend API)
 ✅ [Messaging ] Twilio (WhatsApp & SMS)                       |  306ms | Account "ResumeBuddy" (Status: active)
-✅ [Payments  ] Razorpay Live API                             |  167ms | Authenticated. Key: rzp_live_S3OS1kYFdHMP5x, Active Plans: 1
+✅ [Payments  ] Razorpay Live API                             |  167ms | Authenticated. Key: rzp_live_***, Active Plans: 1
 ================================================================
 ```
 
@@ -122,7 +122,7 @@ The application employs an intelligent 3-tier fallback matrix in `src/ai/smart-r
 
 - **Resend API:** ✅ Authenticated (`re_Vr5...`). Email verification active.
 - **Twilio Messaging:** ✅ Active account `"ResumeBuddy"` (`ACc9d0...`). WhatsApp and SMS configured.
-- **Razorpay Live:** ✅ Live Key `rzp_live_S3OS1kYFdHMP5x` authenticated with active plan `plan_S3PK86D151PJu3`.
+- **Razorpay Live:** ✅ Live Key `rzp_live_***` authenticated with active plan `plan_S3PK86D151PJu3`.
 
 ---
 

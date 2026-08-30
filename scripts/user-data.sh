@@ -44,10 +44,10 @@ chown -R ubuntu:ubuntu /opt/resumebuddy
 cat << 'EOF' > /opt/resumebuddy/.env.backend
 NODE_ENV=production
 PORT=3001
-REDIS_URL="rediss://default:AZT_AAIncDFhYzAzODM2MTFjNDE0ZGU0ODI4MjU1ZTJmZWY0OWJkOHAxMzgxNDM@equal-snake-38143.upstash.io:6379"
+REDIS_URL="rediss://default:YOUR_UPSTASH_REDIS_PASSWORD@YOUR_UPSTASH_HOST:6379"
 NEXT_PUBLIC_APP_URL="https://www.resume-buddy.tech"
 ALLOWED_ORIGINS="https://www.resume-buddy.tech,https://resume-buddy.tech,https://resume-buddy-v3.vercel.app"
-JWT_SECRET="jtVrKKDLdL0XZdSUl5smxicGqZPopBSlv2SHmvbOM48"
+JWT_SECRET="YOUR_STRONG_RANDOM_JWT_SECRET_AT_LEAST_32_CHARS"
 EOF
 
 # 6. Docker Compose File

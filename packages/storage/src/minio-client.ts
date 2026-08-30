@@ -40,7 +40,7 @@ export function getDefaultBucket(): string {
     process.env.AWS_S3_BUCKET ||
     process.env.S3_BUCKET_NAME ||
     process.env.MINIO_BUCKET ||
-    'resumebuddy-storage-277352717671'
+    'resumebuddy-storage'
   );
 }
 
